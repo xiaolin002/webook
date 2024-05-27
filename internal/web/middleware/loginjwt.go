@@ -62,6 +62,14 @@ func (m *LoginJwtMiddlewareBuilder) CheckLogin() gin.HandlerFunc {
 			ctx.AbortWithStatus(http.StatusUnauthorized)
 			return
 		}
+		if uc.UserAgent != ctx.GetHeader("User-Agent") {
+
+			//后期监控的时候这里要埋点  因为进这里大概率施工急着或者版本升级问题导致
+
+			ctx.AbortWithStatus(http.StatusUnauthorized)
+			return
+
+		}
 
 		//时间过期需要重新设置
 		expireTime := uc.ExpiresAt

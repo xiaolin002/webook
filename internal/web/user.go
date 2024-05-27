@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"project/internal/domain"
 	"project/internal/service"
-	result "project/internal/web/errors"
 	"time"
 )
 
@@ -25,30 +24,20 @@ import (
 
 const (
 	emailRegexpPattern    = ""
-	passwordRegexpPattern = ""
-	bizLogin              = "login"
+	passwordRegexpPattern = ``
 )
-
-var Jwtkey = []byte("")
-
-type UserClaims struct {
-	Uid int64
-	jwt.RegisteredClaims
-}
 
 type UsersHandler struct {
 	emailRegexpRex    *regexp.Regexp
 	passwordRegexpRex *regexp.Regexp
-	svc               service.UserService
-	codeSvc           service.CodeService
+	svc               *service.UsersService
 }
 
-func NewUserHandler(svc service.UserService, codeSvc service.CodeService) *UsersHandler {
+func NewUserHandler(svc *service.UsersService) *UsersHandler {
 	return &UsersHandler{
 		emailRegexpRex:    regexp.MustCompile(emailRegexpPattern, regexp.None),
 		passwordRegexpRex: regexp.MustCompile(passwordRegexpPattern, regexp.None),
 		svc:               svc,
-		codeSvc:           codeSvc,
 	}
 
 }
@@ -60,9 +49,6 @@ func (u *UsersHandler) RegisterRouter(server *gin.Engine) {
 	user.GET("/profile", u.Profile)
 	user.POST("/edit", u.Edit)
 	user.POST("/loginjwt", u.LoginJwt)
-	user.POST("login/sms/verify", u.LoginSmsVerify)
-	user.POST("login/sms/code/send", u.LoginCodeSend)
-
 }
 
 // 注册
@@ -184,10 +170,23 @@ func (u *UsersHandler) LoginJwt(ctx *gin.Context) {
 		return
 	}
 	h, err := u.svc.Login(ctx, login.Email, login.Password)
-
+	uc := UserClaims{
+		Uid: h.Id,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Minute * 5)),
+		},
+		UserAgent: ctx.GetHeader("User-Agent"),
+	}
 	switch err {
 	case nil:
-		u.setJwtToken(ctx, h.Id)
+		token := jwt.NewWithClaims(jwt.SigningMethodES512, uc)
+		tokenStr, err := token.SignedString(Jwtkey)
+		if err != nil {
+			ctx.JSON(http.StatusOK, "系统错误")
+		}
+		// 需要注意的是这里要在跨域的处理中将x-jwt-token暴露给前端，将token带过去，同时在AllowHeaders中添加Authorization ,是前端将数据带回
+		ctx.Header("x-jwt-token", tokenStr)
+
 		ctx.JSON(http.StatusOK, "登录成功")
 	case service.ErrInvalidUserOrPassword:
 		ctx.JSON(http.StatusOK, "用户名或密码错误")
@@ -202,163 +201,19 @@ func (u *UsersHandler) LoginJwt(ctx *gin.Context) {
 // 获取信息
 
 func (u *UsersHandler) Profile(ctx *gin.Context) {
-	h, ok := ctx.MustGet("user").(UserClaims)
-	if !ok {
-		// 没有获取到user的信息
-		ctx.AbortWithStatus(http.StatusUnauthorized)
-		return
-	}
-	userinfo, err := u.svc.GetProfile(ctx, h.Uid)
-	if err != nil {
-		ctx.String(http.StatusOK, "系统错误")
-		return
-	}
-	type User struct {
-		Nickname string `json:"nickname"`
-		Email    string `json:"email"`
-		AboutMe  string `json:"aboutMe"`
-		Birthday string `json:"birthday"`
-	}
-	ctx.JSON(http.StatusOK, User{
-		Nickname: userinfo.NickName,
-		Email:    userinfo.Email,
-		AboutMe:  userinfo.AboutMe,
-		Birthday: userinfo.Birthday.Format(time.DateOnly),
-	})
+	ctx.JSON(http.StatusOK, "获取信息")
 }
 
 // 修改
 
 func (u *UsersHandler) Edit(ctx *gin.Context) {
-	type Req struct {
-		Nickname string `json:"nickname"`
-		AboutMe  string `json:"aboutMe"`
-		Birthday string `json:"birthday"`
-	}
-	var req Req
-	err := ctx.Bind(&req)
-	if err != nil {
-		ctx.String(http.StatusOK, "系统错误")
-		return
-	}
-	edu, ok := ctx.MustGet("user").(UserClaims)
-	if !ok {
-		ctx.AbortWithStatus(http.StatusUnauthorized)
-		return
-	}
-	// 校验格式
-	bir, err := time.Parse(time.DateOnly, req.Birthday)
-	if err != nil {
-		ctx.String(http.StatusOK, "生日格式不对")
-		return
-	}
-
-	err = u.svc.UpdateNonSensitiveInfo(ctx, domain.User{
-		Id:       edu.Uid,
-		AboutMe:  req.AboutMe,
-		NickName: req.Nickname,
-		Birthday: bir,
-	})
-	if err != nil {
-		ctx.String(http.StatusOK, "系统异常")
-		return
-	}
-	ctx.JSON(http.StatusOK, "修改成功")
+	ctx.JSON(http.StatusOK, "修改")
 }
 
-func (u *UsersHandler) LoginCodeSend(ctx *gin.Context) {
+var Jwtkey = []byte("")
 
-	type Req struct {
-		Phone string `json:"phone"`
-	}
-	var req Req
-	err := ctx.Bind(&req)
-	if err != nil {
-		return
-	}
-
-	if req.Phone == "" {
-		ctx.JSON(http.StatusOK, result.StatusMsg{
-			Code: 2,
-			Msg:  "请输入手机号码",
-		})
-	}
-	err = u.codeSvc.Send(ctx, bizLogin, req.Phone)
-	switch err {
-	case nil:
-		ctx.JSON(http.StatusOK, result.StatusMsg{
-			Code: 0,
-			Msg:  "发送成功",
-		})
-	case service.ErrCodeSendTooMany:
-		ctx.JSON(http.StatusOK, result.StatusMsg{
-			Code: 4,
-			Msg:  "短信发送太频繁请稍后再试",
-		})
-	default:
-		ctx.JSON(http.StatusOK, result.StatusMsg{
-			Code: -1,
-			Msg:  "系统错误",
-		})
-		// 补日志
-	}
-}
-
-func (u *UsersHandler) LoginSmsVerify(ctx *gin.Context) {
-	type Req struct {
-		Phone string `json:"phone"`
-		Code  string `json:"code"`
-	}
-	var req Req
-	err := ctx.Bind(&req)
-	if err != nil {
-		// bind 若果错误的话就是400直接返回
-		return
-	}
-	ok, err := u.codeSvc.Verify(ctx, bizLogin, req.Phone, req.Code)
-	if err != nil {
-		ctx.JSON(http.StatusOK, result.StatusMsg{
-			Code: -1,
-			Msg:  "系统异常",
-		})
-		return
-	}
-	if !ok {
-		ctx.JSON(http.StatusOK, result.StatusMsg{
-			Code: 4,
-			Msg:  "验证码不对请重新输入",
-		})
-		return
-	}
-	// 这里如果成功的话就要进行对jwt的设置
-	h, err := u.svc.FindOrCreate(ctx, req.Phone)
-	if err != nil {
-		ctx.JSON(http.StatusOK, result.StatusMsg{
-			Code: -1,
-			Msg:  "系统异常",
-		})
-		return
-	}
-	u.setJwtToken(ctx, h.Id)
-	ctx.JSON(http.StatusOK, result.StatusMsg{
-		Code: 0,
-		Msg:  "登录成功",
-	})
-
-}
-func (u *UsersHandler) setJwtToken(ctx *gin.Context, uid int64) {
-	uc := UserClaims{
-		Uid: uid,
-		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Minute * 5)),
-		},
-	}
-	token := jwt.NewWithClaims(jwt.SigningMethodES512, uc)
-	tokenStr, err := token.SignedString(Jwtkey)
-	if err != nil {
-		ctx.JSON(http.StatusOK, "系统错误")
-	}
-	// 需要注意的是这里要在跨域的处理中将x-jwt-token暴露给前端，将token带过去，同时在AllowHeaders中添加Authorization ,是前端将数据带回
-	ctx.Header("x-jwt-token", tokenStr)
-
+type UserClaims struct {
+	Uid int64
+	jwt.RegisteredClaims
+	UserAgent string
 }
