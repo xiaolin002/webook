@@ -23,6 +23,7 @@ type UserService interface {
 	Login(ctx context.Context, email string, password string) (domain.User, error)
 	GetProfile(ctx context.Context, uid int64) (domain.User, error)
 	UpdateNonSensitiveInfo(ctx context.Context, user domain.User) error
+
 	FindOrCreate(ctx context.Context, phone string) (domain.User, error)
 }
 type usersService struct {
@@ -80,8 +81,10 @@ func (svc *usersService) FindOrCreate(ctx context.Context, phone string) (domain
 		return u, err
 	}
 	// 那就说明用户没有找到，需要创建
-	err = svc.repo.Create(ctx, u)
-	// 两种可能 一种是唯一索引冲突 另一种恰好是系统错误
+	err = svc.repo.Create(ctx, domain.User{
+		Phone: phone,
+	})
+	// 两种可能 一种是唯一索引冲突(这个手机号已经被注册了) 另一种恰好是系统错误
 
 	if err != nil && err != repository.ErrDuplicateUser {
 		return domain.User{}, err

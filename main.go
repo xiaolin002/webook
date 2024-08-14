@@ -9,11 +9,14 @@ import (
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	"project/internal/repository"
+	"project/internal/repository/cache"
 	"project/internal/repository/dao"
 	"project/internal/service"
+	"project/internal/service/sms"
 	"project/internal/web"
 	"project/internal/web/middleware"
 	"project/pkg/ginx/middliware/ratelimit"
+	"project/wire"
 	"strings"
 	"time"
 )
@@ -23,23 +26,45 @@ import (
 
 func main() {
 
-	db := initDB()
-	router := initWebServer()
-	initUserHdl(db, router)
-	err := router.Run(":8081")
-	if err != nil {
-		panic("端口可能被占用")
-	}
-	// 使用这种写法
-	//hdl := &user2.UserHandler{}
+	server := wire.InitWebServer()
+	server.Run(":8081")
+
+	//wire未改造前
+	//db := initDB()
+	//redisClient := redis.NewClient(&redis.Options{
+	//	Addr: ""})
+	//codeSvc := initCodeSvc(redisClient)
+	//router := initWebServer()
+	//// sms 的初始化
+	//
+	//initUserHdl(db, redisClient, codeSvc, router)
+	//err := router.Run(":8081")
+	//if err != nil {
+	//	panic("端口可能被占用")
+	//}
+	//
 }
 
-func initUserHdl(db *gorm.DB, server *gin.Engine) {
+func initUserHdl(db *gorm.DB, redisClient redis.Cmdable, codeSvc service.CodeService, server *gin.Engine) {
 	ud := dao.NewUserDao(db)
-	repo := repository.NewUsersRepository(ud)
+	uc := cache.NewUserCache(redisClient)
+
+	repo := repository.NewCacheUsersRepository(ud, uc)
 	svc := service.NewUsersService(repo)
-	hdl := web.NewUserHandler(svc)
+	hdl := web.NewUserHandler(svc, codeSvc)
 	hdl.RegisterRouter(server)
+}
+
+func initCodeSvc(redisClient redis.Cmdable) service.CodeService {
+	cc := cache.NewCodeCache(redisClient)
+	cpo := repository.NewCodeRepository(cc)
+
+	return service.NewCodeService(nil, cpo)
+
+}
+
+func initMemorySms() sms.Service {
+	return nil
 }
 
 func initDB() *gorm.DB {

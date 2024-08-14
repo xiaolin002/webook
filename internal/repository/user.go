@@ -71,7 +71,7 @@ func (repo *CacheUsersRepository) FindById(ctx context.Context, uid int64) (doma
 	// 异步写法
 	// 另外回写缓存的时候忽略掉了错误，故需改善
 	go func() {
-		if err := repo.cache.Set(ctx, du); err != nil {
+		if err = repo.cache.Set(ctx, du); err != nil {
 			// 网络崩了 或者redis崩了 缓存击穿
 			log.Println(err)
 		}

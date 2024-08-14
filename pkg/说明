@@ -1,6 +1,9 @@
 可脱离项目使用的东西
 
 
+go 高版本的东西用go install
+
+
 
 
 func initUserHdl(db *gorm.DB, server *gin.Engine, rds redis.Cmdable, codeSvc service.CodeService) {

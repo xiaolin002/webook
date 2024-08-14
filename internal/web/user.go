@@ -25,16 +25,19 @@ import (
 const (
 	emailRegexpPattern    = ""
 	passwordRegexpPattern = ``
+	bizLogin              = "login"
 )
 
 type UsersHandler struct {
 	emailRegexpRex    *regexp.Regexp
 	passwordRegexpRex *regexp.Regexp
-	svc               *service.UsersService
+	svc               service.UserService
+	codeSvc           service.CodeService
 }
 
-func NewUserHandler(svc *service.UsersService) *UsersHandler {
+func NewUserHandler(svc service.UserService, codeSvc service.CodeService) *UsersHandler {
 	return &UsersHandler{
+		codeSvc:           codeSvc,
 		emailRegexpRex:    regexp.MustCompile(emailRegexpPattern, regexp.None),
 		passwordRegexpRex: regexp.MustCompile(passwordRegexpPattern, regexp.None),
 		svc:               svc,
@@ -49,6 +52,27 @@ func (u *UsersHandler) RegisterRouter(server *gin.Engine) {
 	user.GET("/profile", u.Profile)
 	user.POST("/edit", u.Edit)
 	user.POST("/loginjwt", u.LoginJwt)
+	user.POST("/login_sms/code/send", u.SendSmsLoginCode)
+	user.POST("/login_sms", u.LoginSms)
+}
+
+func (u *UsersHandler) setJwtToken(ctx *gin.Context, uid int64) {
+
+	uc := UserClaims{
+		Uid: uid,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Minute * 5)),
+		},
+		UserAgent: ctx.GetHeader("User-Agent"),
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodES512, uc)
+	tokenStr, err := token.SignedString(Jwtkey)
+	if err != nil {
+		ctx.JSON(http.StatusOK, "系统错误")
+	}
+	// 需要注意的是这里要在跨域的处理中将x-jwt-token暴露给前端，将token带过去，同时在AllowHeaders中添加Authorization ,是前端将数据带回
+	ctx.Header("x-jwt-token", tokenStr)
+
 }
 
 // 注册
@@ -170,23 +194,10 @@ func (u *UsersHandler) LoginJwt(ctx *gin.Context) {
 		return
 	}
 	h, err := u.svc.Login(ctx, login.Email, login.Password)
-	uc := UserClaims{
-		Uid: h.Id,
-		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Minute * 5)),
-		},
-		UserAgent: ctx.GetHeader("User-Agent"),
-	}
+
 	switch err {
 	case nil:
-		token := jwt.NewWithClaims(jwt.SigningMethodES512, uc)
-		tokenStr, err := token.SignedString(Jwtkey)
-		if err != nil {
-			ctx.JSON(http.StatusOK, "系统错误")
-		}
-		// 需要注意的是这里要在跨域的处理中将x-jwt-token暴露给前端，将token带过去，同时在AllowHeaders中添加Authorization ,是前端将数据带回
-		ctx.Header("x-jwt-token", tokenStr)
-
+		u.setJwtToken(ctx, h.Id)
 		ctx.JSON(http.StatusOK, "登录成功")
 	case service.ErrInvalidUserOrPassword:
 		ctx.JSON(http.StatusOK, "用户名或密码错误")
@@ -208,6 +219,93 @@ func (u *UsersHandler) Profile(ctx *gin.Context) {
 
 func (u *UsersHandler) Edit(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, "修改")
+}
+
+func (u *UsersHandler) SendSmsLoginCode(ctx *gin.Context) {
+	type Req struct {
+		Phone string `json:"phone"`
+	}
+	var req Req
+	if err := ctx.Bind(&req); err != nil {
+		ctx.JSON(http.StatusOK, "系统错误")
+		return
+	}
+	if req.Phone == "" {
+		ctx.JSON(http.StatusOK, StatusMsg{
+			Code: 4,
+			Msg:  "手机号不能为空",
+		})
+		return
+	}
+	err := u.codeSvc.Send(ctx, bizLogin, req.Phone)
+	switch err {
+
+	case nil:
+		ctx.JSON(http.StatusOK, StatusMsg{
+			Code: 0,
+			Msg:  "发送成功",
+		})
+	case service.ErrCodeSendTooMany:
+		ctx.JSON(http.StatusOK, StatusMsg{
+			Code: 4,
+			Msg:  "短信发送太频繁,请稍后再试",
+		})
+	default:
+		ctx.JSON(http.StatusOK, StatusMsg{
+			Code: 5,
+			Msg:  "系统错误",
+		})
+		// 补日志
+	}
+
+}
+
+func (u *UsersHandler) LoginSms(ctx *gin.Context) {
+	type Req struct {
+		Phone string `json:"phone"`
+		Code  string `json:"code"`
+	}
+	var req Req
+	if err := ctx.Bind(&req); err != nil {
+		ctx.JSON(http.StatusOK, "系统错误")
+		return
+	}
+	if req.Phone == "" || req.Code == "" {
+		ctx.JSON(http.StatusOK, StatusMsg{
+			Code: 4,
+			Msg:  "手机号或验证码不能为空",
+		})
+		return
+	}
+	ok, err := u.codeSvc.Verify(ctx, bizLogin, req.Phone, req.Code)
+	if err != nil {
+		ctx.JSON(http.StatusOK, StatusMsg{
+			Code: 5,
+			Msg:  "系统错误",
+		})
+		return
+	}
+	if !ok {
+		ctx.JSON(http.StatusOK, StatusMsg{
+			Code: 4,
+			Msg:  "验证码错误",
+		})
+		return
+	}
+	h, err := u.svc.FindOrCreate(ctx, req.Phone)
+	if err != nil {
+		ctx.JSON(http.StatusOK, StatusMsg{
+			Code: 5,
+			Msg:  "系统错误",
+		})
+		return
+	}
+	u.setJwtToken(ctx, h.Id)
+	ctx.JSON(http.StatusOK, StatusMsg{
+		Code: 0,
+		Msg:  "登录成功",
+	})
+
 }
 
 var Jwtkey = []byte("")

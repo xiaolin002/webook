@@ -21,7 +21,7 @@ type LoginJwtMiddlewareBuilder struct {
 func (m *LoginJwtMiddlewareBuilder) CheckLogin() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		path := ctx.Request.URL.Path
-		if path == "/user/signup" || path == "/user/login" {
+		if path == "/user/signup" || path == "/user/login" || path == "/user/login_sms/code/send" || path == "/user/login_sms" {
 			return
 		}
 		/*

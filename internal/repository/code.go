@@ -11,6 +11,7 @@ import (
  **/
 
 var ErrCodeVerifyTooMany = cache.ErrCodeVerifyToMany
+var ErrCodeSendTooMany = cache.ErrCodeSendToMany
 
 type CodeRepository interface {
 	Send(ctx context.Context, biz string, phone, code string) error
