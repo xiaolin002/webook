@@ -3,11 +3,8 @@ package middleware
 import (
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
-	"log"
 	"net/http"
-	"project/internal/web"
-	"strings"
-	"time"
+	jwt2 "project/internal/web/jwt"
 )
 
 /**
@@ -16,39 +13,27 @@ import (
  **/
 
 type LoginJwtMiddlewareBuilder struct {
+	jwt2.Handler
+}
+
+func NewLoginJwtMiddlewareBuilder(hdl jwt2.Handler) *LoginJwtMiddlewareBuilder {
+	return &LoginJwtMiddlewareBuilder{Handler: hdl}
 }
 
 func (m *LoginJwtMiddlewareBuilder) CheckLogin() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		path := ctx.Request.URL.Path
-		if path == "/user/signup" || path == "/user/login" || path == "/user/login_sms/code/send" || path == "/user/login_sms" {
+		if path == "/user/signup" || path == "/user/login" || path == "/user/login_sms/code/send" ||
+			path == "/user/login_sms" || path == "/oauth2/wechat/authurl" || path == "/oauth2/wechat/callback" {
 			return
 		}
-		/*
-		   1. 获取jwt的token
-		   2. 验证token
-		   3. 如果过期重新弄一个token
-		*/
-		//  1. 获取jwt的token
-		tokenCode := ctx.GetHeader("Authorization")
-		if tokenCode == "" {
-			// 没有数据没有登录
-			ctx.AbortWithStatus(http.StatusUnauthorized)
-			return
-		}
+		// 被抽出来成了一个方法
 
-		// 因为 前端待会的数据是以 Bear  ****形式的，故需要分割
-		seg := strings.Split(tokenCode, " ")
-		if len(seg) > 2 {
-			// 非法的token
-			ctx.AbortWithStatus(http.StatusUnauthorized)
-			return
-		}
-		tokenStr := seg[1]
-		// 验证token
-		var uc web.UserClaims
+		tokenStr := m.ExtractToken(ctx)
+
+		var uc jwt2.UserClaims
 		token, err := jwt.ParseWithClaims(tokenStr, &uc, func(token *jwt.Token) (interface{}, error) {
-			return web.Jwtkey, nil
+			return jwt2.JWTKey, nil
 		})
 		if err != nil {
 			// token 不对 伪造的
@@ -70,18 +55,12 @@ func (m *LoginJwtMiddlewareBuilder) CheckLogin() gin.HandlerFunc {
 			return
 
 		}
-
-		//时间过期需要重新设置
-		expireTime := uc.ExpiresAt
-		if expireTime.Sub(time.Now()) < time.Second*50 {
-			expireTime = jwt.NewNumericDate(time.Now().Add(time.Second))
-			tokenStr, err = token.SignedString(web.Jwtkey)
-			ctx.Header("x-jwt-token", tokenStr)
-			if err != nil {
-				log.Println(err)
-			}
-
+		err = m.CheckSession(ctx, uc.Ssid)
+		if err != nil {
+			ctx.AbortWithStatus(http.StatusUnauthorized)
+			return
 		}
+
 		ctx.Set("user", uc)
 
 	}

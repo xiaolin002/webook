@@ -14,9 +14,10 @@ type User struct {
 	Email    string
 	Password string
 
-	NickName string
-	Phone    string
-	AboutMe  string
-	Ctime    time.Time
-	Birthday time.Time
+	NickName   string
+	Phone      string
+	AboutMe    string
+	Ctime      time.Time
+	Birthday   time.Time
+	WechatInfo WechatInfo
 }

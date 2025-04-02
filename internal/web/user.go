@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"project/internal/domain"
 	"project/internal/service"
-	"time"
+	jwt2 "project/internal/web/jwt"
 )
 
 /**
@@ -29,50 +29,39 @@ const (
 )
 
 type UsersHandler struct {
+	// 组合
+	jwt2.Handler
 	emailRegexpRex    *regexp.Regexp
 	passwordRegexpRex *regexp.Regexp
 	svc               service.UserService
 	codeSvc           service.CodeService
 }
 
-func NewUserHandler(svc service.UserService, codeSvc service.CodeService) *UsersHandler {
+func NewUserHandler(svc service.UserService, codeSvc service.CodeService, hdl jwt2.Handler) *UsersHandler {
 	return &UsersHandler{
 		codeSvc:           codeSvc,
 		emailRegexpRex:    regexp.MustCompile(emailRegexpPattern, regexp.None),
 		passwordRegexpRex: regexp.MustCompile(passwordRegexpPattern, regexp.None),
 		svc:               svc,
+		Handler:           hdl,
 	}
 
 }
 
-func (u *UsersHandler) RegisterRouter(server *gin.Engine) {
+func (u *UsersHandler) RegisterRoute(server *gin.Engine) {
 	user := server.Group("/user")
 	user.POST("/login", u.Login)
 	user.POST("/signup", u.SignUp)
 	user.GET("/profile", u.Profile)
+	user.GET("/refresh_token", u.RefreshToken)
 	user.POST("/edit", u.Edit)
 	user.POST("/loginjwt", u.LoginJwt)
 	user.POST("/login_sms/code/send", u.SendSmsLoginCode)
 	user.POST("/login_sms", u.LoginSms)
-}
-
-func (u *UsersHandler) setJwtToken(ctx *gin.Context, uid int64) {
-
-	uc := UserClaims{
-		Uid: uid,
-		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Minute * 5)),
-		},
-		UserAgent: ctx.GetHeader("User-Agent"),
-	}
-	token := jwt.NewWithClaims(jwt.SigningMethodES512, uc)
-	tokenStr, err := token.SignedString(Jwtkey)
-	if err != nil {
-		ctx.JSON(http.StatusOK, "系统错误")
-	}
-	// 需要注意的是这里要在跨域的处理中将x-jwt-token暴露给前端，将token带过去，同时在AllowHeaders中添加Authorization ,是前端将数据带回
-	ctx.Header("x-jwt-token", tokenStr)
-
+	// session 登出
+	user.POST("/logout", u.SessionLogOut)
+	// jwt 登出
+	user.POST("/logoutjwt", u.LogoutJwt)
 }
 
 // 注册
@@ -197,7 +186,11 @@ func (u *UsersHandler) LoginJwt(ctx *gin.Context) {
 
 	switch err {
 	case nil:
-		u.setJwtToken(ctx, h.Id)
+		err = u.SetloginToken(ctx, h.Id)
+		if err != nil {
+			ctx.JSON(http.StatusOK, "系统错误")
+			return
+		}
 		ctx.JSON(http.StatusOK, "登录成功")
 	case service.ErrInvalidUserOrPassword:
 		ctx.JSON(http.StatusOK, "用户名或密码错误")
@@ -300,7 +293,14 @@ func (u *UsersHandler) LoginSms(ctx *gin.Context) {
 		})
 		return
 	}
-	u.setJwtToken(ctx, h.Id)
+	err = u.SetloginToken(ctx, h.Id)
+	if err != nil {
+		ctx.JSON(http.StatusOK, StatusMsg{
+			Code: 5,
+			Msg:  "系统错误",
+		})
+		return
+	}
 	ctx.JSON(http.StatusOK, StatusMsg{
 		Code: 0,
 		Msg:  "登录成功",
@@ -308,10 +308,68 @@ func (u *UsersHandler) LoginSms(ctx *gin.Context) {
 
 }
 
-var Jwtkey = []byte("")
+func (u *UsersHandler) RefreshToken(ctx *gin.Context) {
+	// 约定前端在Authorization 里边带上refresh_token
+	// 除了该接口 其他接口约定前端在Authorization 里边带上access_token
+	// 由于是需要过期了  所以需要携带长token
+	// 因此可以吧中间件的判断抽出来 成一个方法、
+	tokenStr := u.ExtractToken(ctx)
+	var rc jwt2.RefreshClaims
+	token, err := jwt.ParseWithClaims(tokenStr, &rc, func(token *jwt.Token) (interface{}, error) {
+		return jwt2.RCJWTKey, nil
+	})
+	if err != nil {
+		ctx.AbortWithStatus(http.StatusUnauthorized)
+		return
+	}
+	if token == nil || !token.Valid {
+		ctx.AbortWithStatus(http.StatusUnauthorized)
+		return
+	}
+	// 这里同时要验证一下ssid是否储存在redis中
+	err = u.CheckSession(ctx, rc.Ssid)
+	if err != nil {
 
-type UserClaims struct {
-	Uid int64
-	jwt.RegisteredClaims
-	UserAgent string
+		// 系统错误或者用户已经退出登录了 或者redis崩溃就不需要做校验了
+		ctx.AbortWithStatus(http.StatusUnauthorized)
+
+		return
+	}
+
+	err = u.SetJwtToken(ctx, rc.Uid, rc.Ssid)
+	if err != nil {
+		ctx.JSON(http.StatusOK, StatusMsg{
+			Code: 5,
+			Msg:  "系统错误",
+		})
+	}
+	ctx.JSON(http.StatusOK, StatusMsg{
+		Msg: "Ok",
+	})
+
+}
+
+// SessionLogOut 如果用session的话 就可以这种方式退出
+func (u *UsersHandler) SessionLogOut(ctx *gin.Context) {
+	sess := sessions.Default(ctx)
+	sess.Options(sessions.Options{
+		MaxAge: -1,
+	})
+	sess.Save()
+
+}
+
+func (u *UsersHandler) LogoutJwt(ctx *gin.Context) {
+	err := u.ClearToken(ctx)
+	if err != nil {
+		ctx.JSON(http.StatusOK, StatusMsg{
+			Code: 5,
+			Msg:  "系统错误",
+		})
+		return
+	}
+	ctx.JSON(http.StatusOK, StatusMsg{
+		Msg: "退出登录成功",
+	})
+
 }

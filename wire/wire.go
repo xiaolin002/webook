@@ -10,6 +10,7 @@ import (
 	"project/internal/repository/dao"
 	"project/internal/service"
 	"project/internal/web"
+	jwt2 "project/internal/web/jwt"
 	"project/ioc"
 )
 
@@ -24,6 +25,7 @@ func InitWebServer() *gin.Engine {
 		ioc.InitDB,
 		ioc.InitRedis,
 		ioc.InitSmsService,
+		ioc.InitWechatService,
 
 		dao.NewUserDao,
 
@@ -37,6 +39,8 @@ func InitWebServer() *gin.Engine {
 		service.NewCodeService,
 
 		web.NewUserHandler,
+		web.NewOAuth2WechatHandler,
+		jwt2.NewRedisJWTHandler,
 
 		ioc.InitWebServer,
 		// gin中间件

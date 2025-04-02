@@ -5,8 +5,10 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
 	"project/internal/web"
+	jwt2 "project/internal/web/jwt"
 	"project/internal/web/middleware"
 	"project/pkg/ginx/middliware/ratelimit"
+	"project/pkg/logger"
 	"strings"
 	"time"
 )
@@ -16,10 +18,11 @@ import (
  * @Date 2023/11/25 20:59
  **/
 
-func InitWebServer(mdls []gin.HandlerFunc, hdl *web.UsersHandler) *gin.Engine {
+func InitWebServer(mdls []gin.HandlerFunc, hdl *web.UsersHandler, wechatHdl *web.OAuth2WechatHandler) *gin.Engine {
 	server := gin.Default()
 	server.Use(mdls...)
-	hdl.RegisterRouter(server)
+	hdl.RegisterRoute(server)
+	wechatHdl.RegisterRoute(server)
 	return server
 }
 
@@ -35,13 +38,13 @@ func InitWebServer(mdls []gin.HandlerFunc, hdl *web.UsersHandler) *gin.Engine {
 //	return server
 //}
 
-func InitGinMiddlewares(redisClient redis.Cmdable) []gin.HandlerFunc {
+func InitGinMiddlewares(redisClient redis.Cmdable, hdl jwt2.Handler, l logger.LoggerV1) []gin.HandlerFunc {
 	return []gin.HandlerFunc{
 		// 跨域请求中间件
 		cors.New(cors.Config{
 			AllowCredentials: true,
-			AllowHeaders:     []string{"Content-Type", "Authorization"}, // 这里的Authorization代表的是jwt中的头部
-			ExposeHeaders:    []string{"x-jwt-token"},                   // 允许前端能够访问后端响应中带的头部 ，一般在公司中可能加一些自定义头部，依次在这里加就行
+			AllowHeaders:     []string{"Content-Type", "Authorization"},  // 这里的Authorization代表的是jwt中的头部
+			ExposeHeaders:    []string{"x-jwt-token", "x-refresh-token"}, // 允许前端能够访问后端响应中带的头部 ，一般在公司中可能加一些自定义头部，依次在这里加就行
 			AllowOriginFunc: func(origin string) bool {
 				if strings.HasPrefix(origin, "http://localhost") {
 					return true
@@ -51,12 +54,19 @@ func InitGinMiddlewares(redisClient redis.Cmdable) []gin.HandlerFunc {
 			MaxAge: 12 * time.Hour,
 		}),
 		// jwt中间件
-		(&middleware.LoginJwtMiddlewareBuilder{}).CheckLogin(),
+		//(&middleware.LoginJwtMiddlewareBuilder{}).CheckLogin(),
 		// 限流中间件
 		ratelimit.NewBuilder(redisClient, time.Second, 100).Build(),
 		// 使用session中间件
 		//sessionHandlerFunc(), // 这里应该是初始化session store用的 否则无法用session
-		//(&middleware.LoginMiddlewareBuilder{}).CheckLogin(),
+		middleware.NewLoginJwtMiddlewareBuilder(hdl).CheckLogin(),
+		//middleware.NewLogMiddlewareBuilder(func(ctx context.Context, al middleware.AccessLog) {
+		// 自定义日志打印
+		//	l.Debug("", logger.Field{Key: "req", Val: al})
+		//logEntry := fmt.Sprintf("Time: %s, Path: %s, Method: %s, Status: %d, Duration: %s, ReqBody: %s, RespBody: %s\n",
+		//			time.Now().Format(time.RFC3339), l.Path, l.Method, l.Status, l.Duration, l.ReqBody, l.RespBody)
+		//  l.Debug("", logger.Field{Key: "req log", Val: logEntry})
+		//}).AllowReqBody().AllowRespBody().Build(),
 	}
 
 }

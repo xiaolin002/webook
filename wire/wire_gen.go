@@ -13,6 +13,7 @@ import (
 	"project/internal/repository/dao"
 	"project/internal/service"
 	"project/internal/web"
+	"project/internal/web/jwt"
 	"project/ioc"
 )
 
@@ -20,7 +21,8 @@ import (
 
 func InitWebServer() *gin.Engine {
 	cmdable := ioc.InitRedis()
-	v := ioc.InitGinMiddlewares(cmdable)
+	handler := jwt.NewRedisJWTHandler(cmdable)
+	v := ioc.InitGinMiddlewares(cmdable, handler)
 	db := ioc.InitDB()
 	userDao := dao.NewUserDao(db)
 	userCache := cache.NewUserCache(cmdable)
@@ -30,7 +32,9 @@ func InitWebServer() *gin.Engine {
 	codeCache := cache.NewCodeCache(cmdable)
 	codeRepository := repository.NewCodeRepository(codeCache)
 	codeService := service.NewCodeService(smsService, codeRepository)
-	usersHandler := web.NewUserHandler(userService, codeService)
-	engine := ioc.InitWebServer(v, usersHandler)
+	usersHandler := web.NewUserHandler(userService, codeService, handler)
+	wechatService := ioc.InitWechatService()
+	oAuth2WechatHandler := web.NewOAuth2WechatHandler(wechatService, userService, handler)
+	engine := ioc.InitWebServer(v, usersHandler, oAuth2WechatHandler)
 	return engine
 }

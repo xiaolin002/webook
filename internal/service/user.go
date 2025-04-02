@@ -25,6 +25,7 @@ type UserService interface {
 	UpdateNonSensitiveInfo(ctx context.Context, user domain.User) error
 
 	FindOrCreate(ctx context.Context, phone string) (domain.User, error)
+	FindOrCreateByWechat(ctx context.Context, info domain.WechatInfo) (domain.User, error)
 }
 type usersService struct {
 	repo repository.UserRepository
@@ -93,4 +94,22 @@ func (svc *usersService) FindOrCreate(ctx context.Context, phone string) (domain
 	// 主从延迟  理论上讲强制走主库
 	return svc.repo.FindByPhone(ctx, phone)
 
+}
+
+func (svc *usersService) FindOrCreateByWechat(ctx context.Context, wechatInfo domain.WechatInfo) (domain.User, error) {
+	u, err := svc.repo.FindByWechat(ctx, wechatInfo.OpenId)
+	if err != repository.ErrUserNotFound {
+		return u, err
+	}
+	// 这边就是意味着是一个新用户
+	// JSON 格式的 wechatInfo
+	// 记录日志 zap.L().Info("新用户", zap.Any("wechatInfo", wechatInfo))
+	//svc.logger.Info("新用户", zap.Any("wechatInfo", wechatInfo))
+	err = svc.repo.Create(ctx, domain.User{
+		WechatInfo: wechatInfo,
+	})
+	if err != nil && err != repository.ErrDuplicateUser {
+		return domain.User{}, err
+	}
+	return svc.repo.FindByWechat(ctx, wechatInfo.OpenId)
 }
