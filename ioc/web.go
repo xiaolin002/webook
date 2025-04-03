@@ -8,7 +8,6 @@ import (
 	jwt2 "project/internal/web/jwt"
 	"project/internal/web/middleware"
 	"project/pkg/ginx/middliware/ratelimit"
-	"project/pkg/logger"
 	"strings"
 	"time"
 )
@@ -18,11 +17,13 @@ import (
  * @Date 2023/11/25 20:59
  **/
 
-func InitWebServer(mdls []gin.HandlerFunc, hdl *web.UsersHandler, wechatHdl *web.OAuth2WechatHandler) *gin.Engine {
+func InitWebServer(mdls []gin.HandlerFunc, hdl *web.UsersHandler,
+	wechatHdl *web.OAuth2WechatHandler, artHdl *web.ArticleHandler) *gin.Engine {
 	server := gin.Default()
 	server.Use(mdls...)
 	hdl.RegisterRoute(server)
 	wechatHdl.RegisterRoute(server)
+	artHdl.RegisterRoute(server)
 	return server
 }
 
@@ -38,7 +39,7 @@ func InitWebServer(mdls []gin.HandlerFunc, hdl *web.UsersHandler, wechatHdl *web
 //	return server
 //}
 
-func InitGinMiddlewares(redisClient redis.Cmdable, hdl jwt2.Handler, l logger.LoggerV1) []gin.HandlerFunc {
+func InitGinMiddlewares(redisClient redis.Cmdable, hdl jwt2.Handler) []gin.HandlerFunc {
 	return []gin.HandlerFunc{
 		// 跨域请求中间件
 		cors.New(cors.Config{

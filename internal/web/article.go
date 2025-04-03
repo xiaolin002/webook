@@ -1,0 +1,101 @@
+package web
+
+import (
+	"github.com/gin-gonic/gin"
+	"net/http"
+	"project/internal/domain"
+	"project/internal/service"
+	"project/internal/web/jwt"
+)
+
+/**
+ * @Description
+ * @Date 2025/4/3 16:11
+ **/
+type ArticleHandler struct {
+	svc service.ArticleService
+}
+
+func NewArticleHandler(svc service.ArticleService) *ArticleHandler {
+	return &ArticleHandler{
+		svc: svc,
+	}
+}
+
+func (h *ArticleHandler) RegisterRoute(server *gin.Engine) {
+	g := server.Group("/articles")
+
+	//g.PUT("/", h.Edit)
+	g.POST("/edit", h.Edit)
+	g.POST("/publish", h.Publish)
+
+}
+
+// Edit 接收 Article 输入，返回一个 ID，文章的 ID
+func (h *ArticleHandler) Edit(ctx *gin.Context) {
+
+	// 注意新建和编辑的区别
+	// 新建的话，ID就不传，编辑的话就需要传id
+	type Req struct {
+		Id      int64  `json:"id"`
+		Title   string `json:"title"`
+		Content string `json:"content"`
+	}
+	var req Req
+	if err := ctx.Bind(&req); err != nil {
+		return
+	}
+	uc := ctx.MustGet("user").(jwt.UserClaims)
+	id, err := h.svc.Save(ctx, domain.Article{
+		Id:      req.Id,
+		Title:   req.Title,
+		Content: req.Content,
+		Author: domain.Author{
+			Id: uc.Uid,
+		},
+	})
+	if err != nil {
+		ctx.JSON(http.StatusOK, StatusMsg{
+			Msg: "系统错误",
+		})
+
+		return
+	}
+	ctx.JSON(http.StatusOK, StatusMsg{
+		Data: id,
+	})
+}
+
+func (h *ArticleHandler) Publish(ctx *gin.Context) {
+
+	// 发表的流程一定是先保存到制作库后保存到读者库
+	type Req struct {
+		Id      int64  `json:"id"`
+		Title   string `json:"title"`
+		Content string `json:"content"`
+	}
+	var req Req
+	if err := ctx.Bind(&req); err != nil {
+		return
+	}
+	uc := ctx.MustGet("user").(jwt.UserClaims)
+	id, err := h.svc.Publish(ctx, domain.Article{
+		Id:      req.Id,
+		Title:   req.Title,
+		Content: req.Content,
+		Author: domain.Author{
+			Id: uc.Uid,
+		},
+	})
+	if err != nil {
+		ctx.JSON(http.StatusOK, StatusMsg{
+			Msg: "系统错误",
+		})
+		// 记录日志 发表文章失败
+
+		return
+	}
+	ctx.JSON(http.StatusOK, StatusMsg{
+		Data: id,
+	})
+}
