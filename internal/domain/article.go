@@ -13,8 +13,26 @@ type Article struct {
 	Author  Author
 	Ctime   time.Time
 	Utime   time.Time
+	Status  ArticleStatus
 }
 type Author struct {
 	Id   int64
 	Name string
 }
+
+type ArticleStatus uint8
+
+func (s ArticleStatus) ToUint8() uint8 {
+	return uint8(s)
+}
+
+const (
+	// ArticleStatusUnknown 未知状态
+	ArticleStatusUnknown ArticleStatus = iota
+	// ArticleStatusUnPublished 未发布
+	ArticleStatusUnPublished
+	// ArticleStatusPublished 已发布
+	ArticleStatusPublished
+	// ArticleStatusPrivate  仅自己可见
+	ArticleStatusPrivate
+)

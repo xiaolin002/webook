@@ -28,6 +28,7 @@ func (h *ArticleHandler) RegisterRoute(server *gin.Engine) {
 	//g.PUT("/", h.Edit)
 	g.POST("/edit", h.Edit)
 	g.POST("/publish", h.Publish)
+	g.POST("/withdraw", h.Withdraw)
 
 }
 
@@ -97,5 +98,27 @@ func (h *ArticleHandler) Publish(ctx *gin.Context) {
 	}
 	ctx.JSON(http.StatusOK, StatusMsg{
 		Data: id,
+	})
+}
+func (h *ArticleHandler) Withdraw(ctx *gin.Context) {
+	type Req struct {
+		Id int64
+	}
+	var req Req
+	if err := ctx.Bind(&req); err != nil {
+		return
+	}
+	uc := ctx.MustGet("user").(jwt.UserClaims)
+	err := h.svc.Withdraw(ctx, uc.Uid, req.Id)
+	if err != nil {
+		ctx.JSON(http.StatusOK, StatusMsg{
+			Msg:  "系统错误",
+			Code: 5,
+		})
+
+		return
+	}
+	ctx.JSON(http.StatusOK, StatusMsg{
+		Msg: "OK",
 	})
 }
