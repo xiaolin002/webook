@@ -15,9 +15,13 @@ import (
  **/
 
 type ArticleDAO interface {
+	// Insert 用来首次进行文章的创建
 	Insert(ctx context.Context, art Article) (int64, error)
+	// UpdateById 用来更新文章的内容和状态
 	UpdateById(ctx context.Context, art Article) error
+	//	Sync 用来发表文章（即创建好后，直接发布 或者更新完成后直接发布，线上库和制作库两者直接都保存）
 	Sync(ctx context.Context, entity Article) (int64, error)
+	// SyncStatus 更新文章的状态
 	SyncStatus(ctx *gin.Context, uid int64, id int64, toUint8 uint8) error
 }
 
