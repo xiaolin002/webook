@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"github.com/gin-gonic/gin"
 	"project/internal/domain"
 	"project/internal/repository"
 )
@@ -15,13 +14,19 @@ import (
 type ArticleService interface {
 	Save(ctx context.Context, art domain.Article) (int64, error)
 	Publish(ctx context.Context, art domain.Article) (int64, error)
-	Withdraw(ctx *gin.Context, uid int64, id int64) error
+	Withdraw(ctx context.Context, uid int64, id int64) error
+	// GetByAuthor 作者自己查询自己的文章列表
+	GetByAuthor(ctx context.Context, uid int64, offset int, limit int) ([]domain.Article, error)
 }
 type articleService struct {
 	repo repository.ArticleRepository
 }
 
-func (a *articleService) Withdraw(ctx *gin.Context, uid int64, id int64) error {
+func (a *articleService) GetByAuthor(ctx context.Context, uid int64, offset int, limit int) ([]domain.Article, error) {
+	return a.repo.GetByAuthor(ctx, uid, offset, limit)
+}
+
+func (a *articleService) Withdraw(ctx context.Context, uid int64, id int64) error {
 	return a.repo.SyncStatus(ctx, uid, id, domain.ArticleStatusPrivate)
 }
 

@@ -20,6 +20,16 @@ type Author struct {
 	Name string
 }
 
+// 取摘要
+func (a Article) Abstract() string {
+	str := []rune(a.Content)
+	// 只取部分作为摘要
+	if len(str) > 128 {
+		str = str[:128]
+	}
+	return string(str)
+}
+
 type ArticleStatus uint8
 
 func (s ArticleStatus) ToUint8() uint8 {

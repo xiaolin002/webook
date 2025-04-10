@@ -3,7 +3,6 @@ package dao
 import (
 	"context"
 	"errors"
-	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 	"time"
@@ -22,14 +21,28 @@ type ArticleDAO interface {
 	//	Sync 用来发表文章（即创建好后，直接发布 或者更新完成后直接发布，线上库和制作库两者直接都保存）
 	Sync(ctx context.Context, entity Article) (int64, error)
 	// SyncStatus 更新文章的状态
-	SyncStatus(ctx *gin.Context, uid int64, id int64, toUint8 uint8) error
+	SyncStatus(ctx context.Context, uid int64, id int64, toUint8 uint8) error
+	GetByAuthor(ctx context.Context, uid int64, offset int, limit int) ([]Article, error)
 }
 
 type ArticleGORMDAO struct {
 	db *gorm.DB
 }
 
-func (a *ArticleGORMDAO) SyncStatus(ctx *gin.Context, uid int64, id int64, status uint8) error {
+func (a *ArticleGORMDAO) GetByAuthor(ctx context.Context, uid int64, offset int, limit int) ([]Article, error) {
+	var arts []Article
+
+	// 其中的order可根据最近更新的时间进行排序，也可以根据创建时间进行排序
+	err := a.db.WithContext(ctx).
+		Where("author_id = ?", uid).
+		Offset(offset).Limit(limit).
+		// a ASC, B DESC
+		Order("utime DESC").
+		Find(&arts).Error
+	return arts, err
+}
+
+func (a *ArticleGORMDAO) SyncStatus(ctx context.Context, uid int64, id int64, status uint8) error {
 	now := time.Now().UnixMilli()
 	return a.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		res := tx.Model(&Article{}).

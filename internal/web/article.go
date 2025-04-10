@@ -1,11 +1,13 @@
 package web
 
 import (
+	"github.com/ecodeclub/ekit/slice"
 	"github.com/gin-gonic/gin"
 	"net/http"
 	"project/internal/domain"
 	"project/internal/service"
 	"project/internal/web/jwt"
+	"time"
 )
 
 /**
@@ -29,6 +31,13 @@ func (h *ArticleHandler) RegisterRoute(server *gin.Engine) {
 	g.POST("/edit", h.Edit)
 	g.POST("/publish", h.Publish)
 	g.POST("/withdraw", h.Withdraw)
+
+	// 创作者接口  查看指定文章内容
+	g.GET("/detail/:id", h.Detail)
+	// 按照道理来说，这边就是 GET 方法
+	// /list?offset=?&limit=?
+	// 查看文章列表
+	g.POST("/list", h.List)
 
 }
 
@@ -120,5 +129,43 @@ func (h *ArticleHandler) Withdraw(ctx *gin.Context) {
 	}
 	ctx.JSON(http.StatusOK, StatusMsg{
 		Msg: "OK",
+	})
+}
+
+func (h *ArticleHandler) Detail(ctx *gin.Context) {
+
+}
+
+func (h *ArticleHandler) List(ctx *gin.Context) {
+	var page Page
+	if err := ctx.Bind(&page); err != nil {
+		return
+	}
+	// 我要不要检测一下？
+	uc := ctx.MustGet("user").(jwt.UserClaims)
+	arts, err := h.svc.GetByAuthor(ctx, uc.Uid, page.Offset, page.Limit)
+	if err != nil {
+		ctx.JSON(http.StatusOK, StatusMsg{
+			Code: 5,
+			Msg:  "系统错误",
+		})
+
+		return
+	}
+	ctx.JSON(http.StatusOK, StatusMsg{
+		Data: slice.Map[domain.Article, ArticleVo](arts, func(idx int, src domain.Article) ArticleVo {
+			return ArticleVo{
+				Id:       src.Id,
+				Title:    src.Title,
+				Abstract: src.Abstract(),
+
+				//Content:  src.Content,
+				AuthorId: src.Author.Id,
+				// 列表，你不需要
+				Status: src.Status.ToUint8(),
+				Ctime:  src.Ctime.Format(time.DateTime),
+				Utime:  src.Utime.Format(time.DateTime),
+			}
+		}),
 	})
 }
