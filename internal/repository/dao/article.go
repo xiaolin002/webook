@@ -23,10 +23,18 @@ type ArticleDAO interface {
 	// SyncStatus 更新文章的状态
 	SyncStatus(ctx context.Context, uid int64, id int64, toUint8 uint8) error
 	GetByAuthor(ctx context.Context, uid int64, offset int, limit int) ([]Article, error)
+	GetById(ctx context.Context, id int64) (Article, error)
 }
 
 type ArticleGORMDAO struct {
 	db *gorm.DB
+}
+
+func (a *ArticleGORMDAO) GetById(ctx context.Context, id int64) (Article, error) {
+	var art Article
+	err := a.db.WithContext(ctx).
+		Where("id = ?", id).First(&art).Error
+	return art, err
 }
 
 func (a *ArticleGORMDAO) GetByAuthor(ctx context.Context, uid int64, offset int, limit int) ([]Article, error) {

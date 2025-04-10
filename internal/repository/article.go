@@ -24,11 +24,32 @@ type ArticleRepository interface {
 	SyncStatus(ctx context.Context, uid int64, id int64, private domain.ArticleStatus) error
 	// GetByAuthor 作者自己查询自己的文章列表
 	GetByAuthor(ctx context.Context, uid int64, offset int, limit int) ([]domain.Article, error)
+	// GetById 查看指定文章内容
+	GetById(ctx context.Context, id int64) (domain.Article, error)
 }
 
 type CacheArticleRepository struct {
 	dao   dao.ArticleDAO
 	cache cache.ArticleCache
+}
+
+func (c *CacheArticleRepository) GetById(ctx context.Context, id int64) (domain.Article, error) {
+	res, err := c.cache.Get(ctx, id)
+	if err == nil {
+		return res, nil
+	}
+	art, err := c.dao.GetById(ctx, id)
+	if err != nil {
+		return domain.Article{}, err
+	}
+
+	go func() {
+		err = c.cache.Set(ctx, art)
+		if err != nil {
+			// 记录日志
+		}
+	}()
+	return c.ToDomain(art), nil
 }
 
 func (c *CacheArticleRepository) GetByAuthor(ctx context.Context, uid int64, offset int, limit int) ([]domain.Article, error) {
@@ -63,6 +84,14 @@ func (c *CacheArticleRepository) GetByAuthor(ctx context.Context, uid int64, off
 				// 监控
 			}
 		}
+	}()
+
+	// 这里是制定的一个策略 当访问列表时 会访问第一个 所以设置第一个缓存
+	// 异步的话最好设置一个新的context
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		c.preCache(ctx, arts)
 	}()
 
 	return res, nil
@@ -139,5 +168,17 @@ func (c *CacheArticleRepository) ToDomain(art dao.Article) domain.Article {
 		Ctime:  time.UnixMilli(art.Ctime),
 		Utime:  time.UnixMilli(art.Utime),
 		Status: domain.ArticleStatus(art.Status),
+	}
+}
+
+func (c *CacheArticleRepository) preCache(ctx context.Context, arts []dao.Article) {
+	// 这里防止文章太大需要进行限制
+	const size = 1024 * 1024
+	if len(arts) > 0 && len(arts[0].Content) <= size && arts[0].Status == domain.ArticleStatusPublished.ToUint8() {
+		err := c.cache.Set(ctx, arts[0])
+		if err != nil {
+			// 记录日志
+		}
+
 	}
 }

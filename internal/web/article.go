@@ -7,6 +7,7 @@ import (
 	"project/internal/domain"
 	"project/internal/service"
 	"project/internal/web/jwt"
+	"strconv"
 	"time"
 )
 
@@ -133,7 +134,48 @@ func (h *ArticleHandler) Withdraw(ctx *gin.Context) {
 }
 
 func (h *ArticleHandler) Detail(ctx *gin.Context) {
+	idstr := ctx.Param("id")
+	id, err := strconv.ParseInt(idstr, 10, 64)
+	if err != nil {
+		ctx.JSON(http.StatusOK, StatusMsg{
+			Msg:  "id 参数错误",
+			Code: 4,
+		})
+		return
+	}
+	art, err := h.svc.GetById(ctx, id)
+	if err != nil {
+		ctx.JSON(http.StatusOK, StatusMsg{
+			Msg:  "系统错误",
+			Code: 5,
+		})
 
+		return
+	}
+	uc := ctx.MustGet("user").(jwt.UserClaims)
+	if art.Author.Id != uc.Uid {
+		// 有人在搞鬼
+		ctx.JSON(http.StatusOK, StatusMsg{
+			Msg:  "系统错误",
+			Code: 5,
+		})
+		// 日志记录
+		return
+	}
+
+	vo := ArticleVo{
+		Id:    art.Id,
+		Title: art.Title,
+		//Abstract: art.Abstract(),
+
+		Content:  art.Content,
+		AuthorId: art.Author.Id,
+		// 列表，你不需要
+		Status: art.Status.ToUint8(),
+		Ctime:  art.Ctime.Format(time.DateTime),
+		Utime:  art.Utime.Format(time.DateTime),
+	}
+	ctx.JSON(http.StatusOK, StatusMsg{Data: vo})
 }
 
 func (h *ArticleHandler) List(ctx *gin.Context) {
