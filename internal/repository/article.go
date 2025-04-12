@@ -26,11 +26,53 @@ type ArticleRepository interface {
 	GetByAuthor(ctx context.Context, uid int64, offset int, limit int) ([]domain.Article, error)
 	// GetById 查看指定文章内容
 	GetById(ctx context.Context, id int64) (domain.Article, error)
+	// 读者查看指定的文章
+	GetPubById(ctx context.Context, id int64) (domain.Article, error)
 }
 
 type CacheArticleRepository struct {
 	dao   dao.ArticleDAO
 	cache cache.ArticleCache
+	// userRepo 是为了获取作者的信息
+	userRepo UserRepository
+}
+
+func NewCacheArticleRepository(dao dao.ArticleDAO, cache cache.ArticleCache, userRepo UserRepository) ArticleRepository {
+	return &CacheArticleRepository{
+		dao:      dao,
+		cache:    cache,
+		userRepo: userRepo,
+	}
+}
+func (c *CacheArticleRepository) GetPubById(ctx context.Context, id int64) (domain.Article, error) {
+	res, err := c.cache.GetPubById(ctx, id)
+	if err == nil {
+		return res, nil
+	}
+
+	art, err := c.dao.GetPubById(ctx, id)
+	if err != nil {
+		return domain.Article{}, err
+	}
+	// 需要注意的是文章只有作者得id 没有作者的其他信息（name）
+	// 所以需要去查询作者的信息
+	res = c.ToDomain(dao.Article(art))
+	author, err := c.userRepo.FindById(ctx, art.AuthorId)
+	if err != nil {
+		// 可以返回res，err需要记录日志 ，因为吞掉了作者的名字请求错误
+		return domain.Article{}, err
+	}
+	res.Author.Name = author.NickName
+	// 回写缓存
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		err = c.cache.SetPubById(ctx, res)
+		if err != nil {
+			// 记录日志
+		}
+	}()
+	return res, nil
 }
 
 func (c *CacheArticleRepository) GetById(ctx context.Context, id int64) (domain.Article, error) {
@@ -42,14 +84,15 @@ func (c *CacheArticleRepository) GetById(ctx context.Context, id int64) (domain.
 	if err != nil {
 		return domain.Article{}, err
 	}
+	res = c.ToDomain(art)
 
 	go func() {
-		err = c.cache.Set(ctx, art)
+		err = c.cache.Set(ctx, res)
 		if err != nil {
 			// 记录日志
 		}
 	}()
-	return c.ToDomain(art), nil
+	return res, nil
 }
 
 func (c *CacheArticleRepository) GetByAuthor(ctx context.Context, uid int64, offset int, limit int) ([]domain.Article, error) {
@@ -91,7 +134,7 @@ func (c *CacheArticleRepository) GetByAuthor(ctx context.Context, uid int64, off
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()
-		c.preCache(ctx, arts)
+		c.preCache(ctx, res)
 	}()
 
 	return res, nil
@@ -108,17 +151,11 @@ func (c *CacheArticleRepository) SyncStatus(ctx context.Context, uid int64, id i
 	return err
 }
 
-func NewCacheArticleRepository(dao dao.ArticleDAO, cache cache.ArticleCache) ArticleRepository {
-	return &CacheArticleRepository{
-		dao:   dao,
-		cache: cache,
-	}
-}
-
 func (c *CacheArticleRepository) Create(ctx context.Context, art domain.Article) (int64, error) {
 
 	id, err := c.dao.Insert(ctx, c.toEntity(art))
 	if err == nil {
+		// 由于作者新发布了文章，所以需要把缓存删除掉
 		er := c.cache.DelFirstPage(ctx, art.Author.Id)
 		if er != nil {
 			// 也要记录日志
@@ -139,6 +176,7 @@ func (c *CacheArticleRepository) Update(ctx context.Context, art domain.Article)
 	// 根据文章的id来更新
 	err := c.dao.UpdateById(ctx, c.toEntity(art))
 	if err == nil {
+		// 由于作者新发布了文章，所以需要把缓存删除掉
 		er := c.cache.DelFirstPage(ctx, art.Author.Id)
 		if er != nil {
 			// 也要记录日志
@@ -154,6 +192,27 @@ func (c *CacheArticleRepository) Sync(ctx context.Context, art domain.Article) (
 			// 也要记录日志
 		}
 	}
+
+	// 规定新帖子一发布就回写缓存
+	go func() {
+
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		// 你可以灵活设置过期时间
+		user, er := c.userRepo.FindById(ctx, art.Author.Id)
+		if er != nil {
+			// 要记录日志
+			return
+		}
+		art.Author = domain.Author{
+			Id:   user.Id,
+			Name: user.NickName,
+		}
+		er = c.cache.SetPubById(ctx, art)
+		if er != nil {
+			// 记录日志
+		}
+	}()
 	return id, err
 }
 func (c *CacheArticleRepository) ToDomain(art dao.Article) domain.Article {
@@ -171,10 +230,10 @@ func (c *CacheArticleRepository) ToDomain(art dao.Article) domain.Article {
 	}
 }
 
-func (c *CacheArticleRepository) preCache(ctx context.Context, arts []dao.Article) {
+func (c *CacheArticleRepository) preCache(ctx context.Context, arts []domain.Article) {
 	// 这里防止文章太大需要进行限制
 	const size = 1024 * 1024
-	if len(arts) > 0 && len(arts[0].Content) <= size && arts[0].Status == domain.ArticleStatusPublished.ToUint8() {
+	if len(arts) > 0 && len(arts[0].Content) <= size {
 		err := c.cache.Set(ctx, arts[0])
 		if err != nil {
 			// 记录日志

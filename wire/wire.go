@@ -28,10 +28,11 @@ func InitWebServer() *gin.Engine {
 		ioc.InitWechatService,
 
 		dao.NewUserDao,
+		dao.NewArticleGORMDAO,
 
 		cache.NewUserCache,
 		cache.NewCodeCache,
-		dao.NewArticleGORMDAO,
+		cache.NewArticleRedisCache,
 
 		repository.NewCacheUsersRepository,
 		repository.NewCodeRepository,

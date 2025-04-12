@@ -40,6 +40,10 @@ func (h *ArticleHandler) RegisterRoute(server *gin.Engine) {
 	// 查看文章列表
 	g.POST("/list", h.List)
 
+	//读者接口
+	pub := g.Group("/pub")
+	pub.GET("/detail/:id", h.PubDetail)
+
 }
 
 // Edit 接收 Article 输入，返回一个 ID，文章的 ID
@@ -210,4 +214,48 @@ func (h *ArticleHandler) List(ctx *gin.Context) {
 			}
 		}),
 	})
+}
+
+func (h *ArticleHandler) PubDetail(ctx *gin.Context) {
+	idstr := ctx.Param("id")
+	id, err := strconv.ParseInt(idstr, 10, 64)
+	if err != nil {
+		ctx.JSON(http.StatusOK, StatusMsg{
+			Msg:  "id 参数错误",
+			Code: 4,
+		})
+		return
+	}
+	art, err := h.svc.GetPubById(ctx, id)
+	if err != nil {
+		ctx.JSON(http.StatusOK, StatusMsg{
+			Msg:  "系统错误",
+			Code: 5,
+		})
+
+		return
+	}
+	uc := ctx.MustGet("user").(jwt.UserClaims)
+	if art.Author.Id != uc.Uid {
+		// 有人在搞鬼
+		ctx.JSON(http.StatusOK, StatusMsg{
+			Msg:  "系统错误",
+			Code: 5,
+		})
+		// 日志记录
+		return
+	}
+	vo := ArticleVo{
+		Id:    art.Id,
+		Title: art.Title,
+
+		Content:    art.Content,
+		AuthorId:   art.Author.Id,
+		AuthorName: art.Author.Name,
+		// 列表，你不需要
+		Status: art.Status.ToUint8(),
+		Ctime:  art.Ctime.Format(time.DateTime),
+		Utime:  art.Utime.Format(time.DateTime),
+	}
+	ctx.JSON(http.StatusOK, StatusMsg{Data: vo})
 }

@@ -18,9 +18,14 @@ type ArticleService interface {
 	// GetByAuthor 作者自己查询自己的文章列表
 	GetByAuthor(ctx context.Context, uid int64, offset int, limit int) ([]domain.Article, error)
 	GetById(ctx context.Context, id int64) (domain.Article, error)
+	GetPubById(ctx context.Context, id int64) (domain.Article, error)
 }
 type articleService struct {
 	repo repository.ArticleRepository
+}
+
+func (a *articleService) GetPubById(ctx context.Context, id int64) (domain.Article, error) {
+	return a.repo.GetPubById(ctx, id)
 }
 
 func (a *articleService) GetById(ctx context.Context, id int64) (domain.Article, error) {
