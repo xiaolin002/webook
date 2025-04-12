@@ -1,6 +1,7 @@
 package web
 
 import (
+	"context"
 	"github.com/ecodeclub/ekit/slice"
 	"github.com/gin-gonic/gin"
 	"net/http"
@@ -17,11 +18,16 @@ import (
  **/
 type ArticleHandler struct {
 	svc service.ArticleService
+	// 聚合互动服务  点赞 收藏 评论
+	intrSvc service.InteractiveService
+	biz     string
 }
 
-func NewArticleHandler(svc service.ArticleService) *ArticleHandler {
+func NewArticleHandler(svc service.ArticleService, intrSvc service.InteractiveService) *ArticleHandler {
 	return &ArticleHandler{
-		svc: svc,
+		svc:     svc,
+		intrSvc: intrSvc,
+		biz:     "article",
 	}
 }
 
@@ -245,17 +251,28 @@ func (h *ArticleHandler) PubDetail(ctx *gin.Context) {
 		// 日志记录
 		return
 	}
-	vo := ArticleVo{
-		Id:    art.Id,
-		Title: art.Title,
 
-		Content:    art.Content,
-		AuthorId:   art.Author.Id,
-		AuthorName: art.Author.Name,
-		// 列表，你不需要
-		Status: art.Status.ToUint8(),
-		Ctime:  art.Ctime.Format(time.DateTime),
-		Utime:  art.Utime.Format(time.DateTime),
-	}
-	ctx.JSON(http.StatusOK, StatusMsg{Data: vo})
+	go func() {
+		newCtx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		er := h.intrSvc.IncrReadCnt(newCtx, h.biz, art.Id)
+		if er != nil {
+			// 记录日志
+		}
+	}()
+
+	ctx.JSON(http.StatusOK, StatusMsg{
+		Data: ArticleVo{
+			Id:    art.Id,
+			Title: art.Title,
+
+			Content:    art.Content,
+			AuthorId:   art.Author.Id,
+			AuthorName: art.Author.Name,
+			// 列表，你不需要
+			Status: art.Status.ToUint8(),
+			Ctime:  art.Ctime.Format(time.DateTime),
+			Utime:  art.Utime.Format(time.DateTime),
+		},
+	})
 }

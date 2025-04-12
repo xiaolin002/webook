@@ -29,18 +29,22 @@ func InitWebServer() *gin.Engine {
 
 		dao.NewUserDao,
 		dao.NewArticleGORMDAO,
+		dao.NewGORMInteractiveDAO,
 
 		cache.NewUserCache,
 		cache.NewCodeCache,
 		cache.NewArticleRedisCache,
+		cache.NewInteractiveRedisCache,
 
 		repository.NewCacheUsersRepository,
 		repository.NewCodeRepository,
 		repository.NewCacheArticleRepository,
+		repository.NewCachedInteractiveRepository,
 
 		service.NewUsersService,
 		service.NewCodeService,
 		service.NewArticleService,
+		service.NewInteractiveService,
 
 		web.NewUserHandler,
 		web.NewOAuth2WechatHandler,
