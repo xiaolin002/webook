@@ -44,8 +44,9 @@ func (c *CachedInteractiveRepository) Get(ctx context.Context, biz string, id in
 			// 记录日志
 			return res, nil
 		}
-		return intr, err
+
 	}
+	return intr, err
 }
 
 func (c *CachedInteractiveRepository) Liked(ctx context.Context, biz string, id int64, uid int64) (bool, error) {
