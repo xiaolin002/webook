@@ -49,6 +49,8 @@ func (h *ArticleHandler) RegisterRoute(server *gin.Engine) {
 	//读者接口
 	pub := g.Group("/pub")
 	pub.GET("/detail/:id", h.PubDetail)
+	pub.POST("/like", h.Like)
+	pub.POST("/collect", h.Collect)
 
 }
 
@@ -275,4 +277,60 @@ func (h *ArticleHandler) PubDetail(ctx *gin.Context) {
 			Utime:  art.Utime.Format(time.DateTime),
 		},
 	})
+}
+
+func (h *ArticleHandler) Like(c *gin.Context) {
+	type Req struct {
+		Id int64 `json:"id"`
+		// true 是点赞，false 是不点赞
+		Like bool `json:"like"`
+	}
+	var req Req
+	if err := c.Bind(&req); err != nil {
+		return
+	}
+	uc := c.MustGet("user").(jwt.UserClaims)
+	var err error
+	if req.Like {
+		// 点赞
+		err = h.intrSvc.Like(c, h.biz, req.Id, uc.Uid)
+	} else {
+		// 取消点赞
+		err = h.intrSvc.CancelLike(c, h.biz, req.Id, uc.Uid)
+	}
+	if err != nil {
+		c.JSON(http.StatusOK, StatusMsg{
+			Code: 5, Msg: "系统错误",
+		})
+		return
+	}
+	c.JSON(http.StatusOK, StatusMsg{
+		Msg: "OK",
+	})
+}
+
+func (h *ArticleHandler) Collect(c *gin.Context) {
+	type Req struct {
+		Id int64 `json:"id"`
+		// true 是收藏，false 是不收藏
+		// 暂时未做 取消收藏功能 但与取消喜欢一样
+		// 	Coll bool `json:"collect"`
+		Cid int64 `json:"cid"`
+	}
+	var req Req
+	if err := c.Bind(&req); err != nil {
+		return
+	}
+	uc := c.MustGet("user").(jwt.UserClaims)
+	err := h.intrSvc.Collect(c, h.biz, req.Id, req.Cid, uc.Uid)
+	if err != nil {
+		c.JSON(http.StatusOK, StatusMsg{
+			Code: 5, Msg: "系统错误",
+		})
+		return
+	}
+	c.JSON(http.StatusOK, StatusMsg{
+		Msg: "OK",
+	})
+
 }
