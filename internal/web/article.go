@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/ecodeclub/ekit/slice"
 	"github.com/gin-gonic/gin"
+	"golang.org/x/sync/errgroup"
 	"net/http"
 	"project/internal/domain"
 	"project/internal/service"
@@ -234,23 +235,32 @@ func (h *ArticleHandler) PubDetail(ctx *gin.Context) {
 		})
 		return
 	}
-	art, err := h.svc.GetPubById(ctx, id)
+	// 由于文章里边包含点赞收藏和喜欢，所以需要聚合
+	// 这里的话，需要把文章的阅读数，点赞数，收藏数都要聚合
+	var (
+		eg   errgroup.Group
+		art  domain.Article
+		intr domain.Interactive
+	)
+	uc := ctx.MustGet("user").(jwt.UserClaims)
+
+	eg.Go(func() error {
+		var er error
+		art, er = h.svc.GetPubById(ctx, id)
+		return er
+	})
+	eg.Go(func() error {
+		var er error
+		intr, er = h.intrSvc.Get(ctx, h.biz, id, uc.Uid)
+		return er
+
+	})
+	err = eg.Wait()
 	if err != nil {
 		ctx.JSON(http.StatusOK, StatusMsg{
 			Msg:  "系统错误",
 			Code: 5,
 		})
-
-		return
-	}
-	uc := ctx.MustGet("user").(jwt.UserClaims)
-	if art.Author.Id != uc.Uid {
-		// 有人在搞鬼
-		ctx.JSON(http.StatusOK, StatusMsg{
-			Msg:  "系统错误",
-			Code: 5,
-		})
-		// 日志记录
 		return
 	}
 
@@ -271,6 +281,13 @@ func (h *ArticleHandler) PubDetail(ctx *gin.Context) {
 			Content:    art.Content,
 			AuthorId:   art.Author.Id,
 			AuthorName: art.Author.Name,
+
+			ReadCnt:    intr.ReadCnt,
+			CollectCnt: intr.CollectCnt,
+			LikeCnt:    intr.LikeCnt,
+			Liked:      intr.Liked,
+			Collected:  intr.Collected,
+
 			// 列表，你不需要
 			Status: art.Status.ToUint8(),
 			Ctime:  art.Ctime.Format(time.DateTime),
