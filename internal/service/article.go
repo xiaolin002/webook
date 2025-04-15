@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"project/internal/domain"
+	"project/internal/events/article"
 	"project/internal/repository"
 )
 
@@ -18,14 +19,28 @@ type ArticleService interface {
 	// GetByAuthor 作者自己查询自己的文章列表
 	GetByAuthor(ctx context.Context, uid int64, offset int, limit int) ([]domain.Article, error)
 	GetById(ctx context.Context, id int64) (domain.Article, error)
-	GetPubById(ctx context.Context, id int64) (domain.Article, error)
+	GetPubById(ctx context.Context, id int64, uid int64) (domain.Article, error)
 }
 type articleService struct {
-	repo repository.ArticleRepository
+	repo     repository.ArticleRepository
+	producer article.Producer
 }
 
-func (a *articleService) GetPubById(ctx context.Context, id int64) (domain.Article, error) {
-	return a.repo.GetPubById(ctx, id)
+func (a *articleService) GetPubById(ctx context.Context, id int64, uid int64) (domain.Article, error) {
+	res, err := a.repo.GetPubById(ctx, id)
+	go func() {
+		if err == nil {
+			er := a.producer.ProduceReadEvents(article.ReadEvent{
+				Aid: id,
+				Uid: uid,
+			})
+			if er != nil {
+				// 记录日志
+			}
+		}
+
+	}()
+	return res, err
 }
 
 func (a *articleService) GetById(ctx context.Context, id int64) (domain.Article, error) {
@@ -40,9 +55,10 @@ func (a *articleService) Withdraw(ctx context.Context, uid int64, id int64) erro
 	return a.repo.SyncStatus(ctx, uid, id, domain.ArticleStatusPrivate)
 }
 
-func NewArticleService(repo repository.ArticleRepository) ArticleService {
+func NewArticleService(repo repository.ArticleRepository, producer article.Producer) ArticleService {
 	return &articleService{
-		repo: repo,
+		repo:     repo,
+		producer: producer,
 	}
 }
 

@@ -1,7 +1,6 @@
 package web
 
 import (
-	"context"
 	"github.com/ecodeclub/ekit/slice"
 	"github.com/gin-gonic/gin"
 	"golang.org/x/sync/errgroup"
@@ -246,7 +245,7 @@ func (h *ArticleHandler) PubDetail(ctx *gin.Context) {
 
 	eg.Go(func() error {
 		var er error
-		art, er = h.svc.GetPubById(ctx, id)
+		art, er = h.svc.GetPubById(ctx, id, uc.Uid)
 		return er
 	})
 	eg.Go(func() error {
@@ -263,15 +262,15 @@ func (h *ArticleHandler) PubDetail(ctx *gin.Context) {
 		})
 		return
 	}
-
-	go func() {
-		newCtx, cancel := context.WithTimeout(context.Background(), time.Second)
-		defer cancel()
-		er := h.intrSvc.IncrReadCnt(newCtx, h.biz, art.Id)
-		if er != nil {
-			// 记录日志
-		}
-	}()
+	// 用了kafka 所以就不用这个了
+	//go func() {
+	//	newCtx, cancel := context.WithTimeout(context.Background(), time.Second)
+	//	defer cancel()
+	//	er := h.intrSvc.IncrReadCnt(newCtx, h.biz, art.Id)
+	//	if er != nil {
+	//		// 记录日志
+	//	}
+	//}()
 
 	ctx.JSON(http.StatusOK, StatusMsg{
 		Data: ArticleVo{

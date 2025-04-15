@@ -6,7 +6,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 	"project/internal/web/middleware"
-	"project/wire"
 )
 
 // 双击shift可查找任何东西
@@ -14,7 +13,16 @@ import (
 
 func main() {
 	initLogger()
-	server := wire.InitWebServer()
+	app := InitWebServer()
+	for _, c := range app.consumers {
+		err := c.Start()
+		if err != nil {
+			panic(err)
+		}
+
+	}
+
+	server := app.server
 	server.Run(":8081")
 
 }

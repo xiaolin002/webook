@@ -1,10 +1,10 @@
 //go:build wireinject
 
-package wire
+package main
 
 import (
-	"github.com/gin-gonic/gin"
 	"github.com/google/wire"
+	"project/internal/events/article"
 	"project/internal/repository"
 	"project/internal/repository/cache"
 	"project/internal/repository/dao"
@@ -19,17 +19,24 @@ import (
  * @Date 2024/3/12 19:02
  **/
 
-func InitWebServer() *gin.Engine {
+func InitWebServer() *App {
 	wire.Build(
 		// 第三方依赖
 		ioc.InitDB,
 		ioc.InitRedis,
 		ioc.InitSmsService,
 		ioc.InitWechatService,
+		ioc.InitConsumers,
+		ioc.InitSaramaClient,
+		ioc.InitSyncProducer,
 
 		dao.NewUserDao,
 		dao.NewArticleGORMDAO,
 		dao.NewGORMInteractiveDAO,
+
+		//kafka
+		article.NewSaramaSyncProducer,
+		article.NewInteractiveReadEventsConsumer,
 
 		cache.NewUserCache,
 		cache.NewCodeCache,
@@ -54,7 +61,9 @@ func InitWebServer() *gin.Engine {
 		ioc.InitWebServer,
 		// gin中间件
 		ioc.InitGinMiddlewares,
+
+		wire.Struct(new(App), "*"),
 	)
-	return gin.Default()
+	return new(App)
 
 }
