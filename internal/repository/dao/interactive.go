@@ -15,10 +15,25 @@ type InteractiveDAO interface {
 	GetLikeInfo(ctx context.Context, biz string, id int64, uid int64) (UserLikeBiz, error)
 	GetCollectInfo(ctx context.Context, biz string, id int64, uid int64) (UserCollectionBiz, error)
 	Get(ctx context.Context, biz string, id int64) (Interactive, error)
+	// 批量更新阅读数 kafka
+	BatchIncrReadCnt(ctx context.Context, biz []string, bizId []int64) error
 }
 
 type GORMInteractiveDAO struct {
 	db *gorm.DB
+}
+
+func (dao *GORMInteractiveDAO) BatchIncrReadCnt(ctx context.Context, bizs []string, bizIds []int64) error {
+	return dao.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		txDAO := NewGORMInteractiveDAO(tx)
+		for i := 0; i < len(bizs); i++ {
+			err := txDAO.IncrReadCnt(ctx, bizs[i], bizIds[i])
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
 func (dao *GORMInteractiveDAO) GetLikeInfo(ctx context.Context, biz string, id int64, uid int64) (UserLikeBiz, error) {

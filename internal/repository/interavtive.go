@@ -22,10 +22,28 @@ type InteractiveRepository interface {
 	Collected(ctx context.Context, biz string, id int64, uid int64) (bool, error)
 	//得到文章的互动信息 点赞收藏和阅读数
 	Get(ctx context.Context, biz string, id int64) (domain.Interactive, error)
+	// 利用kafka 批量更新阅读数
+	BatchIncrReadCnt(ctx context.Context, bizs []string, ids []int64) error
 }
 type CachedInteractiveRepository struct {
 	dao   dao.InteractiveDAO
 	cache cache.InteractiveCache
+}
+
+func (c *CachedInteractiveRepository) BatchIncrReadCnt(ctx context.Context, bizs []string, bizIds []int64) error {
+	err := c.dao.BatchIncrReadCnt(ctx, bizs, bizIds)
+	if err != nil {
+		return err
+	}
+	go func() {
+		for i := 0; i < len(bizs); i++ {
+			er := c.cache.IncrReadCntIfPresent(ctx, bizs[i], bizIds[i])
+			if er != nil {
+				// 记录日志
+			}
+		}
+	}()
+	return nil
 }
 
 func (c *CachedInteractiveRepository) Get(ctx context.Context, biz string, id int64) (domain.Interactive, error) {
