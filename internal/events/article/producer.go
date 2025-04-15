@@ -5,6 +5,9 @@ import (
 	"github.com/IBM/sarama"
 )
 
+// 如果你写多个生产者，那么可以写多个结构体，每个结构体实现Producer接口 与下边的代码基本一致
+// 除了结构体和topic不一样
+
 const TopicReadEvent = "article_read"
 
 type Producer interface {

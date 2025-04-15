@@ -30,7 +30,7 @@ func InitSyncProducer(c sarama.Client) sarama.SyncProducer {
 	return p
 }
 
-// InitConsumers 消费者列表的初始化
+// InitConsumers 消费者列表的初始化    这里是一个切片，因为可能有多个消费者
 func InitConsumers(c1 *article.InteractiveReadEventsConsumer) []events.Consumer {
 	return []events.Consumer{c1}
 }

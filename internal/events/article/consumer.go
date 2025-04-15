@@ -8,10 +8,7 @@ import (
 	"time"
 )
 
-/**
- * @Description
- * @Date 2025/4/15 20:00
- **/
+// 如果你要写多个消费者，那么可以写多个结构体，每个结构体实现Consumer接口和start方法
 
 type InteractiveReadEventsConsumer struct {
 	repo   repository.InteractiveRepository
