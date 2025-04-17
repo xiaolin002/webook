@@ -114,7 +114,8 @@ func (u *UsersHandler) SignUp(ctx *gin.Context) {
 		ctx.JSON(http.StatusBadRequest, "非法邮箱格式")
 		return
 	}
-	err = u.svc.SignUp(ctx, domain.User{
+	// 这里改为ctx.Request.Context() 是因为otel运行有点问题
+	err = u.svc.SignUp(ctx.Request.Context(), domain.User{
 		Email:    sign.Email,
 		Password: sign.Password,
 	})

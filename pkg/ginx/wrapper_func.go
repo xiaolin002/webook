@@ -18,6 +18,8 @@ func InitCounter(opt prometheus.CounterOpts) {
 	prometheus.MustRegister(vector)
 }
 
+// 这里用来对业务进行包装，可减少一部分重复代码
+
 // WrapBodyAndClaims bizFn 就是你的业务逻辑
 func WrapBodyAndClaims[Req any, Claims jwt.Claims](
 	bizFn func(ctx *gin.Context, req Req, uc Claims) (Result, error),

@@ -18,6 +18,22 @@ type Decorator struct {
 	sum prometheus.Summary
 }
 
+/*
+// NewSummary 创建并注册 Summary 指标
+func NewSummary() prometheus.Summary {
+	summaryOpts := prometheus.SummaryOpts{
+		Name:       "wechat_verify_code_duration_summary",
+		Help:       "Summary of the duration of WeChat verification code verification in milliseconds",
+		Objectives: map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.99: 0.001},
+	}
+	summary := prometheus.NewSummary(summaryOpts)
+	prometheus.MustRegister(summary)
+	return summary
+}
+
+
+*/
+
 func NewDecorator(svc wechat.Service, sum prometheus.Summary) *Decorator {
 	return &Decorator{
 		Service: svc,

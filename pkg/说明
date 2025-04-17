@@ -66,3 +66,89 @@ func useJwtSession(server *gin.Engine) {
 	*/
 
 }
+
+
+Prometheus 监控器 的使用流程
+
+1.定义选项：使用 xxOpts 结构体配置指标的基本信息，如名称、帮助文档等。
+2.创建指标实例：使用 Newxxx 或 NewxxxVec 函数创建指标或指标向量。若需要按标签分组统计，就用 NewxxxVec；若只需单一指标，用 Newxxx。
+3.注册指标：使用 prometheus.MustRegister 把指标注册到 Prometheus 客户端，这样 Prometheus 才能收集该指标。
+4.记录指标数据：在合适的业务逻辑处调用指标实例的方法记录数据
+注意 不同指标类型在记录数据时调用的方法不同，如 Counter 用 Inc()，Gauge 用 Set()、Inc()、Dec() 等，Histogram 和 Summary 用 Observe()。
+
+共同参数
+opt := prometheus.SummaryOpts{
+      Name:       "sms_send_duration_summary",
+      Help:       "Summary of SMS sending duration in milliseconds",
+      Objectives: map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.99: 0.001},
+  }
+
+1.Counter 指标
+// 2. 创建指标实例（非向量形式）
+	counter := prometheus.NewCounter(opts)
+
+	// 3. 注册指标
+	prometheus.MustRegister(counter)
+	4.在业务逻辑中调用
+	counter.Inc()
+
+
+2. Gauge 指标
+
+    2. 创建指标实例
+	gauge := prometheus.NewGauge(opts)
+
+	// 3. 注册指标
+	prometheus.MustRegister(gauge)
+	// 4. 记录指标数据
+    gauge.Set(float64(time.Now().Unix() % 100))
+
+
+    gaugeVec := prometheus.NewGaugeVec(opts, []string{"region"})
+
+    // 4. 记录指标数据
+    gaugeVec.WithLabelValues("us").Set(100)
+
+
+
+
+
+
+3.Histogram 指标
+
+// 2. 创建指标实例
+	histogram := prometheus.NewHistogram(opts)
+
+	// 3. 注册指标
+	prometheus.MustRegister(histogram)
+     start := time.Now()
+		defer func() {
+			// 4. 记录指标数据
+			histogram.Observe(time.Since(start).Seconds())
+		}()
+
+histogramVec := prometheus.NewHistogramVec(opts, []string{"path"})
+
+// 4. 记录指标数据
+histogramVec.WithLabelValues(r.URL.Path).Observe(time.Since(start).Seconds())
+
+
+
+
+4. Summary
+
+  // 2. 创建指标向量实例
+  vector := prometheus.NewSummaryVec(opt, []string{"tpl_id"})
+
+  // 3. 注册指标
+  prometheus.MustRegister(vector)
+
+  // 4. 记录指标数据
+  vector.WithLabelValues(tplId).Observe(float64(duration))
+
+
+
+ 可观测性 有三个方面
+  1. 日志 log  --> zap
+  2. 链路追踪 trace --> openTelemetry
+  3. 监控 metrics  --> prometheus

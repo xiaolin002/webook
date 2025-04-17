@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-contrib/sessions/cookie"
 	"github.com/gin-gonic/gin"
@@ -8,6 +9,8 @@ import (
 	"go.uber.org/zap"
 	"net/http"
 	"project/internal/web/middleware"
+	"project/ioc"
+	"time"
 )
 
 // 双击shift可查找任何东西
@@ -15,6 +18,12 @@ import (
 
 func main() {
 	initLogger()
+	tpCancel := ioc.InitOTEL()
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		tpCancel(ctx)
+	}()
 	app := InitWebServer()
 	initPrometheus()
 	for _, c := range app.consumers {

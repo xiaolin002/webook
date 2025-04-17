@@ -5,6 +5,7 @@ import (
 	"github.com/gin-gonic/gin"
 	prometheus2 "github.com/prometheus/client_golang/prometheus"
 	"github.com/redis/go-redis/v9"
+	otelgin "go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
 	"project/internal/web"
 	jwt2 "project/internal/web/jwt"
 	"project/internal/web/middleware"
@@ -73,6 +74,7 @@ func InitGinMiddlewares(redisClient redis.Cmdable, hdl jwt2.Handler) []gin.Handl
 		//(&middleware.LoginJwtMiddlewareBuilder{}).CheckLogin(),
 		pb.BuildResponseTime(),
 		pb.BuildActiveRequest(),
+		otelgin.Middleware("webook"),
 		// 限流中间件
 		ratelimit.NewBuilder(redisClient, time.Second, 100).Build(),
 		// 使用session中间件

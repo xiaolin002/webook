@@ -4,6 +4,7 @@ import (
 	prometheus2 "github.com/prometheus/client_golang/prometheus"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
+	"gorm.io/plugin/opentelemetry/tracing"
 	"gorm.io/plugin/prometheus"
 	"project/internal/repository/dao"
 	"project/pkg/gromx"
@@ -56,6 +57,11 @@ func InitDB() *gorm.DB {
 	})
 
 	err = db.Use(cb)
+	if err != nil {
+		panic(err)
+	}
+	err = db.Use(tracing.NewPlugin(tracing.WithoutMetrics(),
+		tracing.WithDBName("webook")))
 	if err != nil {
 		panic(err)
 	}
