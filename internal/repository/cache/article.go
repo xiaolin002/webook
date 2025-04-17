@@ -52,7 +52,7 @@ func NewArticleRedisCache(client redis.Cmdable) ArticleCache {
 
 func (a *ArticleRedisCache) GetFirstPage(ctx context.Context, uid int64) ([]domain.Article, error) {
 	key := a.firstKey(uid)
-	//val, err := a.client.Get(ctx, firstKey).Result()
+	//val, errs := a.client.Get(ctx, firstKey).Result()
 	val, err := a.client.Get(ctx, key).Bytes()
 	if err != nil {
 		return nil, err

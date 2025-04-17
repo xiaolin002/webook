@@ -8,14 +8,11 @@ import (
 	"project/internal/domain"
 	"project/internal/service"
 	"project/internal/web/jwt"
+	"project/pkg/ginx"
 	"strconv"
 	"time"
 )
 
-/**
- * @Description
- * @Date 2025/4/3 16:11
- **/
 type ArticleHandler struct {
 	svc service.ArticleService
 	// 聚合互动服务  点赞 收藏 评论
@@ -78,13 +75,13 @@ func (h *ArticleHandler) Edit(ctx *gin.Context) {
 		},
 	})
 	if err != nil {
-		ctx.JSON(http.StatusOK, StatusMsg{
+		ctx.JSON(http.StatusOK, ginx.Result{
 			Msg: "系统错误",
 		})
 
 		return
 	}
-	ctx.JSON(http.StatusOK, StatusMsg{
+	ctx.JSON(http.StatusOK, ginx.Result{
 		Data: id,
 	})
 }
@@ -111,14 +108,14 @@ func (h *ArticleHandler) Publish(ctx *gin.Context) {
 		},
 	})
 	if err != nil {
-		ctx.JSON(http.StatusOK, StatusMsg{
+		ctx.JSON(http.StatusOK, ginx.Result{
 			Msg: "系统错误",
 		})
 		// 记录日志 发表文章失败
 
 		return
 	}
-	ctx.JSON(http.StatusOK, StatusMsg{
+	ctx.JSON(http.StatusOK, ginx.Result{
 		Data: id,
 	})
 }
@@ -133,14 +130,14 @@ func (h *ArticleHandler) Withdraw(ctx *gin.Context) {
 	uc := ctx.MustGet("user").(jwt.UserClaims)
 	err := h.svc.Withdraw(ctx, uc.Uid, req.Id)
 	if err != nil {
-		ctx.JSON(http.StatusOK, StatusMsg{
+		ctx.JSON(http.StatusOK, ginx.Result{
 			Msg:  "系统错误",
 			Code: 5,
 		})
 
 		return
 	}
-	ctx.JSON(http.StatusOK, StatusMsg{
+	ctx.JSON(http.StatusOK, ginx.Result{
 		Msg: "OK",
 	})
 }
@@ -149,7 +146,7 @@ func (h *ArticleHandler) Detail(ctx *gin.Context) {
 	idstr := ctx.Param("id")
 	id, err := strconv.ParseInt(idstr, 10, 64)
 	if err != nil {
-		ctx.JSON(http.StatusOK, StatusMsg{
+		ctx.JSON(http.StatusOK, ginx.Result{
 			Msg:  "id 参数错误",
 			Code: 4,
 		})
@@ -157,7 +154,7 @@ func (h *ArticleHandler) Detail(ctx *gin.Context) {
 	}
 	art, err := h.svc.GetById(ctx, id)
 	if err != nil {
-		ctx.JSON(http.StatusOK, StatusMsg{
+		ctx.JSON(http.StatusOK, ginx.Result{
 			Msg:  "系统错误",
 			Code: 5,
 		})
@@ -167,7 +164,7 @@ func (h *ArticleHandler) Detail(ctx *gin.Context) {
 	uc := ctx.MustGet("user").(jwt.UserClaims)
 	if art.Author.Id != uc.Uid {
 		// 有人在搞鬼
-		ctx.JSON(http.StatusOK, StatusMsg{
+		ctx.JSON(http.StatusOK, ginx.Result{
 			Msg:  "系统错误",
 			Code: 5,
 		})
@@ -187,7 +184,7 @@ func (h *ArticleHandler) Detail(ctx *gin.Context) {
 		Ctime:  art.Ctime.Format(time.DateTime),
 		Utime:  art.Utime.Format(time.DateTime),
 	}
-	ctx.JSON(http.StatusOK, StatusMsg{Data: vo})
+	ctx.JSON(http.StatusOK, ginx.Result{Data: vo})
 }
 
 func (h *ArticleHandler) List(ctx *gin.Context) {
@@ -199,14 +196,14 @@ func (h *ArticleHandler) List(ctx *gin.Context) {
 	uc := ctx.MustGet("user").(jwt.UserClaims)
 	arts, err := h.svc.GetByAuthor(ctx, uc.Uid, page.Offset, page.Limit)
 	if err != nil {
-		ctx.JSON(http.StatusOK, StatusMsg{
+		ctx.JSON(http.StatusOK, ginx.Result{
 			Code: 5,
 			Msg:  "系统错误",
 		})
 
 		return
 	}
-	ctx.JSON(http.StatusOK, StatusMsg{
+	ctx.JSON(http.StatusOK, ginx.Result{
 		Data: slice.Map[domain.Article, ArticleVo](arts, func(idx int, src domain.Article) ArticleVo {
 			return ArticleVo{
 				Id:       src.Id,
@@ -228,7 +225,7 @@ func (h *ArticleHandler) PubDetail(ctx *gin.Context) {
 	idstr := ctx.Param("id")
 	id, err := strconv.ParseInt(idstr, 10, 64)
 	if err != nil {
-		ctx.JSON(http.StatusOK, StatusMsg{
+		ctx.JSON(http.StatusOK, ginx.Result{
 			Msg:  "id 参数错误",
 			Code: 4,
 		})
@@ -256,7 +253,7 @@ func (h *ArticleHandler) PubDetail(ctx *gin.Context) {
 	})
 	err = eg.Wait()
 	if err != nil {
-		ctx.JSON(http.StatusOK, StatusMsg{
+		ctx.JSON(http.StatusOK, ginx.Result{
 			Msg:  "系统错误",
 			Code: 5,
 		})
@@ -272,7 +269,7 @@ func (h *ArticleHandler) PubDetail(ctx *gin.Context) {
 	//	}
 	//}()
 
-	ctx.JSON(http.StatusOK, StatusMsg{
+	ctx.JSON(http.StatusOK, ginx.Result{
 		Data: ArticleVo{
 			Id:    art.Id,
 			Title: art.Title,
@@ -315,12 +312,12 @@ func (h *ArticleHandler) Like(c *gin.Context) {
 		err = h.intrSvc.CancelLike(c, h.biz, req.Id, uc.Uid)
 	}
 	if err != nil {
-		c.JSON(http.StatusOK, StatusMsg{
+		c.JSON(http.StatusOK, ginx.Result{
 			Code: 5, Msg: "系统错误",
 		})
 		return
 	}
-	c.JSON(http.StatusOK, StatusMsg{
+	c.JSON(http.StatusOK, ginx.Result{
 		Msg: "OK",
 	})
 }
@@ -340,12 +337,12 @@ func (h *ArticleHandler) Collect(c *gin.Context) {
 	uc := c.MustGet("user").(jwt.UserClaims)
 	err := h.intrSvc.Collect(c, h.biz, req.Id, req.Cid, uc.Uid)
 	if err != nil {
-		c.JSON(http.StatusOK, StatusMsg{
+		c.JSON(http.StatusOK, ginx.Result{
 			Code: 5, Msg: "系统错误",
 		})
 		return
 	}
-	c.JSON(http.StatusOK, StatusMsg{
+	c.JSON(http.StatusOK, ginx.Result{
 		Msg: "OK",
 	})
 

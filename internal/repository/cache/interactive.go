@@ -88,7 +88,7 @@ func NewInteractiveRedisCache(client redis.Cmdable) InteractiveCache {
 func (i *InteractiveRedisCache) IncrReadCntIfPresent(ctx context.Context, biz string, bizId int64) error {
 	key := i.key(biz, bizId)
 	// 不是特别需要处理 res
-	//res, err := i.client.Eval(ctx, luaIncrCnt, []string{key}, fieldReadCnt, 1).Int()
+	//res, errs := i.client.Eval(ctx, luaIncrCnt, []string{key}, fieldReadCnt, 1).Int()
 	return i.client.Eval(ctx, luaIncrCnt, []string{key}, fieldReadCnt, 1).Err()
 }
 func (i *InteractiveRedisCache) key(biz string, bizId int64) string {

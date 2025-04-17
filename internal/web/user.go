@@ -10,6 +10,7 @@ import (
 	"project/internal/domain"
 	"project/internal/service"
 	jwt2 "project/internal/web/jwt"
+	"project/pkg/ginx"
 )
 
 /**
@@ -224,7 +225,7 @@ func (u *UsersHandler) SendSmsLoginCode(ctx *gin.Context) {
 		return
 	}
 	if req.Phone == "" {
-		ctx.JSON(http.StatusOK, StatusMsg{
+		ctx.JSON(http.StatusOK, ginx.Result{
 			Code: 4,
 			Msg:  "手机号不能为空",
 		})
@@ -234,17 +235,17 @@ func (u *UsersHandler) SendSmsLoginCode(ctx *gin.Context) {
 	switch err {
 
 	case nil:
-		ctx.JSON(http.StatusOK, StatusMsg{
+		ctx.JSON(http.StatusOK, ginx.Result{
 			Code: 0,
 			Msg:  "发送成功",
 		})
 	case service.ErrCodeSendTooMany:
-		ctx.JSON(http.StatusOK, StatusMsg{
+		ctx.JSON(http.StatusOK, ginx.Result{
 			Code: 4,
 			Msg:  "短信发送太频繁,请稍后再试",
 		})
 	default:
-		ctx.JSON(http.StatusOK, StatusMsg{
+		ctx.JSON(http.StatusOK, ginx.Result{
 			Code: 5,
 			Msg:  "系统错误",
 		})
@@ -264,7 +265,7 @@ func (u *UsersHandler) LoginSms(ctx *gin.Context) {
 		return
 	}
 	if req.Phone == "" || req.Code == "" {
-		ctx.JSON(http.StatusOK, StatusMsg{
+		ctx.JSON(http.StatusOK, ginx.Result{
 			Code: 4,
 			Msg:  "手机号或验证码不能为空",
 		})
@@ -272,14 +273,14 @@ func (u *UsersHandler) LoginSms(ctx *gin.Context) {
 	}
 	ok, err := u.codeSvc.Verify(ctx, bizLogin, req.Phone, req.Code)
 	if err != nil {
-		ctx.JSON(http.StatusOK, StatusMsg{
+		ctx.JSON(http.StatusOK, ginx.Result{
 			Code: 5,
 			Msg:  "系统错误",
 		})
 		return
 	}
 	if !ok {
-		ctx.JSON(http.StatusOK, StatusMsg{
+		ctx.JSON(http.StatusOK, ginx.Result{
 			Code: 4,
 			Msg:  "验证码错误",
 		})
@@ -287,7 +288,7 @@ func (u *UsersHandler) LoginSms(ctx *gin.Context) {
 	}
 	h, err := u.svc.FindOrCreate(ctx, req.Phone)
 	if err != nil {
-		ctx.JSON(http.StatusOK, StatusMsg{
+		ctx.JSON(http.StatusOK, ginx.Result{
 			Code: 5,
 			Msg:  "系统错误",
 		})
@@ -295,13 +296,13 @@ func (u *UsersHandler) LoginSms(ctx *gin.Context) {
 	}
 	err = u.SetloginToken(ctx, h.Id)
 	if err != nil {
-		ctx.JSON(http.StatusOK, StatusMsg{
+		ctx.JSON(http.StatusOK, ginx.Result{
 			Code: 5,
 			Msg:  "系统错误",
 		})
 		return
 	}
-	ctx.JSON(http.StatusOK, StatusMsg{
+	ctx.JSON(http.StatusOK, ginx.Result{
 		Code: 0,
 		Msg:  "登录成功",
 	})
@@ -338,12 +339,12 @@ func (u *UsersHandler) RefreshToken(ctx *gin.Context) {
 
 	err = u.SetJwtToken(ctx, rc.Uid, rc.Ssid)
 	if err != nil {
-		ctx.JSON(http.StatusOK, StatusMsg{
+		ctx.JSON(http.StatusOK, ginx.Result{
 			Code: 5,
 			Msg:  "系统错误",
 		})
 	}
-	ctx.JSON(http.StatusOK, StatusMsg{
+	ctx.JSON(http.StatusOK, ginx.Result{
 		Msg: "Ok",
 	})
 
@@ -362,13 +363,13 @@ func (u *UsersHandler) SessionLogOut(ctx *gin.Context) {
 func (u *UsersHandler) LogoutJwt(ctx *gin.Context) {
 	err := u.ClearToken(ctx)
 	if err != nil {
-		ctx.JSON(http.StatusOK, StatusMsg{
+		ctx.JSON(http.StatusOK, ginx.Result{
 			Code: 5,
 			Msg:  "系统错误",
 		})
 		return
 	}
-	ctx.JSON(http.StatusOK, StatusMsg{
+	ctx.JSON(http.StatusOK, ginx.Result{
 		Msg: "退出登录成功",
 	})
 

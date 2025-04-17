@@ -60,7 +60,7 @@ func (repo *CacheUsersRepository) FindById(ctx context.Context, uid int64) (doma
 	if err == nil {
 		return du, err
 	}
-	// err 不为nil 就要查询数据库
+	// errs 不为nil 就要查询数据库
 	//  err有两种可能
 	// 1.key 不存在 说明redis正常
 	// 2.访问redis 有问题 可能是网络问题，也可能是redis本身就奔溃了

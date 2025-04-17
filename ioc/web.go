@@ -3,10 +3,13 @@ package ioc
 import (
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	prometheus2 "github.com/prometheus/client_golang/prometheus"
 	"github.com/redis/go-redis/v9"
 	"project/internal/web"
 	jwt2 "project/internal/web/jwt"
 	"project/internal/web/middleware"
+	"project/pkg/ginx"
+	"project/pkg/ginx/middliware/prometheus"
 	"project/pkg/ginx/middliware/ratelimit"
 	"strings"
 	"time"
@@ -40,6 +43,18 @@ func InitWebServer(mdls []gin.HandlerFunc, hdl *web.UsersHandler,
 //}
 
 func InitGinMiddlewares(redisClient redis.Cmdable, hdl jwt2.Handler) []gin.HandlerFunc {
+	pb := &prometheus.Builder{
+		Namespace: "geektime_daming",
+		Subsystem: "webook",
+		Name:      "gin_http",
+		Help:      "统计 GIN 的HTTP接口数据",
+	}
+	ginx.InitCounter(prometheus2.CounterOpts{
+		Namespace: "geektime_daming",
+		Subsystem: "webook",
+		Name:      "biz_code",
+		Help:      "统计业务错误码",
+	})
 	return []gin.HandlerFunc{
 		// 跨域请求中间件
 		cors.New(cors.Config{
@@ -56,6 +71,8 @@ func InitGinMiddlewares(redisClient redis.Cmdable, hdl jwt2.Handler) []gin.Handl
 		}),
 		// jwt中间件
 		//(&middleware.LoginJwtMiddlewareBuilder{}).CheckLogin(),
+		pb.BuildResponseTime(),
+		pb.BuildActiveRequest(),
 		// 限流中间件
 		ratelimit.NewBuilder(redisClient, time.Second, 100).Build(),
 		// 使用session中间件
